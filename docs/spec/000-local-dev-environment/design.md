@@ -52,9 +52,12 @@ Flutter Web (localhost:8080)
 - `app/main.py`: `create_app()` で CORS とルータを組み立て、`lifespan` でロギング初期化。
 - `app/api/router.py`: 機能ごとのルータをここに集約する。
 - `app/core/config.py`: `pydantic-settings` による設定。`get_settings()` を DI する。
-- `app/services/gemini.py`: `google-genai` の `Client` を `lru_cache` で共有し、SDK 例外を `GeminiError` に変換。
+- ~~`app/services/gemini.py`: `google-genai` の `Client` を `lru_cache` で共有し、SDK 例外を `GeminiError` に変換。~~
+  → **spec 001 で `app/services/agent.py`(ADK 経由)に置き換え済み。**
 
 ## 7. Gemini プロンプト設計
+
+> 呼び出し方は spec 001(Agent ADK)で置き換えられている。以下は当初設計。
 
 - モデル: `gemini-2.5-flash`(`GEMINI_MODEL` で変更可)
 - `system_instruction` は設定値。履歴は `types.Content` のリストに変換して渡す。

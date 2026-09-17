@@ -13,14 +13,18 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      # サービスアカウントキーを使う場合(infra/secrets/ に配置)
-      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa.json
       # Windows のバインドマウントでは inotify が効かないためポーリングで監視する
       WATCHFILES_FORCE_POLLING: "true"
+      # サービスアカウントキーを使う場合のみ有効化する(既定は ADC)
+      # GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa.json
     volumes:
       - ./backend:/app
       - backend-venv:/app/.venv
-      - ./infra/secrets:/secrets:ro
+      # ADC(gcloud auth application-default login で作った資格情報)をコンテナに渡す。
+      # ホスト側のパスはリポジトリ直下の .env で GCLOUD_CONFIG_DIR に設定する。
+      - ${GCLOUD_CONFIG_DIR:?リポジトリ直下の .env に GCLOUD_CONFIG_DIR を設定してください(.env.example 参照)}:/root/.config/gcloud:ro
+      # サービスアカウントキーを使う場合のみ有効化する
+      # - ./infra/secrets:/secrets:ro
     command: >
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:

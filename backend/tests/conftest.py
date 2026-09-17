@@ -2,19 +2,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.schemas.chat import ChatMessage
-from app.services.gemini import GeminiService, get_gemini_service
+from app.schemas.chat import Attachment, ChatMessage
+from app.services.agent import AgentService, get_agent_service
 
 
-class FakeGeminiService(GeminiService):
-    """外部 API を叩かないテスト用スタブ。"""
+class FakeAgentService(AgentService):
+    """ADK / 外部 API を呼ばないテスト用スタブ。"""
 
-    async def generate_reply(self, message: str, history: list[ChatMessage]) -> str:
-        return f"echo: {message}"
+    async def generate_reply(
+        self,
+        message: str,
+        history: list[ChatMessage],
+        attachments: list[Attachment] | None = None,
+    ) -> str:
+        suffix = f" (+{len(attachments)} files)" if attachments else ""
+        return f"echo: {message}{suffix}"
 
 
 @pytest.fixture
 def client() -> TestClient:
     app = create_app()
-    app.dependency_overrides[get_gemini_service] = FakeGeminiService
+    app.dependency_overrides[get_agent_service] = FakeAgentService
     return TestClient(app)

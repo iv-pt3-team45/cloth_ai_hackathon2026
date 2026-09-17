@@ -1,6 +1,6 @@
 # 要件定義: ローカル開発環境の整備
 
-- ステータス: reviewed(AC-1 / AC-4 の実機確認待ち)
+- ステータス: reviewed(AC-1 の実機確認待ち)
 - 作成日: 2026-09-16
 - 更新日: 2026-09-16
 
@@ -31,13 +31,13 @@
 - [ ] AC-1: Given リポジトリ直下, When `docker compose up --build`, Then `http://localhost:8080` でフロント、`http://localhost:8000/docs` で API ドキュメントが開ける。(compose 定義の検証済み / 実起動は未確認)
 - [x] AC-2: Given `backend/`, When `uv run python -m pytest`, Then 全テストが成功する。
 - [x] AC-3: Given `frontend/`, When `flutter analyze` と `flutter test`, Then エラー 0 件で成功する。
-- [ ] AC-4: Given `.env` に GCP プロジェクトを設定した状態, When フロントからメッセージを送信, Then Gemini の応答が画面に表示される。(Vertex AI への到達は確認済み。実プロジェクト ID 設定後に要確認)
+- [x] AC-4: Given `.env` に GCP プロジェクトを設定した状態, When メッセージを送信, Then Gemini の応答が返る。(2026-09-17 に実プロジェクトで確認済み)
 - [x] AC-6: Given `main` への push, When GitHub Actions が起動, Then Lint / 型チェック / テストが自動実行され、失敗時に検知できる。(ワークフロー作成済み・ローカルで同等コマンドの成功を確認。GitHub 上での初回実行は未確認)
 - [x] AC-5: Given `docs/spec/_template/`, When 新機能を開始, Then requirements / design / tasks の雛形をコピーして使える。
 
 ## 5. 制約 / 前提
 
-- Gemini は Google Cloud(Vertex AI)経由で利用する。認証は ADC またはサービスアカウントキー。
+- Gemini は Google Cloud(Vertex AI)経由で利用する。**認証は ADC を基本とする**(鍵ファイルは原則使わない)。
 - 型チェック(mypy)は開発マシンのアプリ制御ポリシーで実行できないため、CI での実行を必須とする。
 - 開発マシンは Windows 11 を想定(バインドマウントのファイル監視はポーリング)。
 

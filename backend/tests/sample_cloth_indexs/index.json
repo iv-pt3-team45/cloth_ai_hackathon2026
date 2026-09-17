@@ -1,0 +1,108 @@
+{
+  "generated_at": "2026-09-17T15:48:06+09:00",
+  "model": "gemini-2.5-flash",
+  "source_dir": "tests\\sample_images",
+  "count": 5,
+  "entries": [
+    {
+      "image": "image (1).jpeg",
+      "items": [
+        {
+          "category": "ロングTシャツ",
+          "material": "綿",
+          "shape": "長袖クルーネック",
+          "colors": [
+            "パープル",
+            "ホワイト"
+          ],
+          "pattern": "プリント",
+          "style": "ストリート",
+          "notes": "フロントに、ビーニーとヘッドホンを着用したドクロ、星のモチーフ、「髑髏」「パンク」「東京」の文字が描かれたグラフィックプリント。"
+        }
+      ],
+      "summary": "木製の床に置かれた長袖のTシャツ。",
+      "model": "gemini-2.5-flash",
+      "analyzed_at": "2026-09-17T15:42:40+09:00"
+    },
+    {
+      "image": "image (2).jpeg",
+      "items": [
+        {
+          "category": "ジーンズ",
+          "material": "デニム",
+          "shape": "ストレート",
+          "colors": [
+            "青",
+            "インディゴ",
+            "水色"
+          ],
+          "pattern": "色落ち加工",
+          "style": "カジュアル",
+          "notes": "フロントはボタンフライ。全体的に色落ちとヒゲ、ハチノス（膝裏のシワによる色落ち）が見られる。ウエスト部分に「DEFFO YAMATO」のブランドロゴがある。"
+        }
+      ],
+      "summary": "フローリングの床に置かれた、色落ち加工が施されたデニムジーンズ。",
+      "model": "gemini-2.5-flash",
+      "analyzed_at": "2026-09-17T15:42:45+09:00"
+    },
+    {
+      "image": "image-20260917-153230-44bfd8.jpg",
+      "items": [
+        {
+          "category": "シャツ",
+          "material": "綿",
+          "shape": "長袖ボタンダウンシャツ",
+          "colors": [
+            "ネイビー"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "ボタンダウンカラー、しわ感のある素材"
+        }
+      ],
+      "summary": "木製の床の上にきれいに畳まれた長袖シャツが置かれている。",
+      "model": "gemini-2.5-flash",
+      "analyzed_at": "2026-09-17T15:42:48+09:00"
+    },
+    {
+      "image": "image-20260917-153247-81d0d9.jpg",
+      "items": [
+        {
+          "category": "Tシャツ",
+          "material": "綿",
+          "shape": "半袖クルーネック",
+          "colors": [
+            "白"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "特になし"
+        }
+      ],
+      "summary": "木製の床の上に白い半袖Tシャツが平置きされている画像です。",
+      "model": "gemini-2.5-flash",
+      "analyzed_at": "2026-09-17T15:42:51+09:00"
+    },
+    {
+      "image": "image.jpeg",
+      "items": [
+        {
+          "category": "Tシャツ",
+          "material": "綿",
+          "shape": "半袖クルーネック",
+          "colors": [
+            "ピンク",
+            "黄色",
+            "赤"
+          ],
+          "pattern": "プリント",
+          "style": "カジュアル",
+          "notes": "「Let's Eat」と書かれた、ひび割れたような質感の円形プリント。文字は赤、円の背景は黄色で縁取りは赤。"
+        }
+      ],
+      "summary": "床に広げられたピンクの半袖Tシャツ。前面に「Let's Eat」と書かれた黄色と赤の円形プリントが施されています。",
+      "model": "gemini-2.5-flash",
+      "analyzed_at": "2026-09-17T15:42:54+09:00"
+    }
+  ]
+}

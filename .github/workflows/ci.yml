@@ -40,7 +40,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Type check (mypy)
-        run: uv run python -m mypy app
+        run: uv run python -m mypy app scripts
 
       - name: Test (pytest)
         run: uv run python -m pytest -q
@@ -79,10 +79,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # compose は backend/.env を参照する(実体は Git 管理外)ため雛形から用意する
+      # compose は backend/.env とルートの .env を参照する(どちらも Git 管理外)
       - name: Validate compose file
         run: |
           cp backend/.env.example backend/.env
+          cp .env.example .env
           docker compose config --quiet
 
       - name: Set up Buildx
