@@ -28,7 +28,7 @@
 
 ## 4. 受け入れ基準
 
-- [ ] AC-1: Given リポジトリ直下, When `docker compose up --build`, Then `http://localhost:8080` でフロント、`http://localhost:8000/docs` で API ドキュメントが開ける。(compose 定義の検証済み / 実起動は未確認)
+- [x] AC-1: Given リポジトリ直下, When `docker compose up --build`, Then `http://localhost:8080` でフロント、`http://localhost:8000/docs` で API ドキュメントが開ける。(2026-09-18 に Windows 11 + Docker Desktop で実起動を確認。debug 起動では白画面になったため compose のフロントを `--release` に変更した)
 - [x] AC-2: Given `backend/`, When `uv run python -m pytest`, Then 全テストが成功する。
 - [x] AC-3: Given `frontend/`, When `flutter analyze` と `flutter test`, Then エラー 0 件で成功する。
 - [x] AC-4: Given `.env` に GCP プロジェクトを設定した状態, When メッセージを送信, Then Gemini の応答が返る。(2026-09-17 に実プロジェクトで確認済み)

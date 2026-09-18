@@ -47,9 +47,13 @@ services:
       - ./frontend:/app
       - frontend-pub-cache:/root/.pub-cache
       - frontend-dart-tool:/app/.dart_tool
-    # ブラウザはホスト側で動くため、API 参照先はホストから見た URL を指定する
+    # ブラウザはホスト側で動くため、API 参照先はホストから見た URL を指定する。
+    # release で起動する: debug では DWDS(Dart Web Dev Service)がコンテナ内のアプリに
+    # アタッチできず「Bad state: Not connected to an application」を返し続け、
+    # main() が起動許可を得られないまま白画面になる。compose は結合確認用なので
+    # ホットリロードは捨てる(フロントの開発中は README 4.2 のネイティブ起動を使う)。
     command: >
-      flutter run -d web-server
+      flutter run -d web-server --release
       --web-hostname 0.0.0.0 --web-port 8080
       --dart-define=API_BASE_URL=http://localhost:8000
     stdin_open: true
