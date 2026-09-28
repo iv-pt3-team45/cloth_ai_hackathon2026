@@ -281,6 +281,10 @@ docker compose up --build
 
 停止は `docker compose down`(ボリュームも消す場合は `-v`)。
 
+> **compose のフロントは release 起動**(`flutter run -d web-server --release`)。
+> debug だと DWDS がコンテナ内のアプリにアタッチできず白画面になるため(9 参照)。
+> **ホットリロードは効かない。** フロントを書き換えながら開発するときは 4.2 のネイティブ起動を使う。
+
 ### 4.2 ネイティブ起動(開発中はこちらが高速)
 
 バックエンド:
@@ -813,6 +817,7 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | `is only supported in the Interactions API` | `gemini-omni-*` を `generateContent` で呼んでいる。`client.interactions.create()` を使う |
 | 画像生成の応答にファイル名が出ない | `GEMINI_SYSTEM_INSTRUCTION` を上書きしても、ツール利用の指示は `agent.py` の `TOOL_GUIDELINE` が付与する。モデルを変えた場合は追従を確認する |
 | Flutter コンテナのビルドが遅い | 開発中はネイティブ起動(4.2)を使い、compose は結合確認時に使う |
+| compose で `http://localhost:8080` が白画面 | フロントを debug で起動している。compose は `--release` 必須(4.1)。debug だと DWDS が `Bad state: Not connected to an application` を返し続け、`main()` が起動しない。ブラウザのコンソールに同エラーが並ぶのが目印 |
 
 ---
 
