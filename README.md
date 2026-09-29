@@ -16,6 +16,8 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 | パッケージ管理 | uv | `backend/pyproject.toml` + `backend/uv.lock` で固定 |
 | エージェント基盤 | Agent Development Kit (ADK) | `google-adk`。`LlmAgent` + `Runner` で Gemini を呼ぶ。ツール実行への拡張が前提 |
 | 外部 API | Gemini(Google Cloud Vertex AI) | ADK 経由で呼び出す。**認証は ADC**(鍵ファイルは使わない) |
+| 外部 API | YouTube Data API v3 | MV のメタ情報取得(4.8)。`httpx` で直接呼ぶ。**認証は API キー**(例外。3.4) |
+| 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
 | メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4) |
 | 実行環境 | Docker Compose | フロント / バックを 1 コマンドで同時起動 |
 | 設定管理 | pydantic-settings / `.env` | 秘匿情報は Git 管理外 |
@@ -54,6 +56,8 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 │            │              例外は業務例外(AgentError 等)に変換       │
 │   app/schemas/        ── Pydantic モデル(API 契約)                  │
 │   app/core/           ── 設定(config) / ロギング                    │
+│   app/services/youtube.py ── YouTube Data API を httpx で直接呼ぶ   │
+│   app/services/culture.py ── Gemini を google-genai で直接呼ぶ      │
 └──────────────────────────────────┼──────────────────────────────────┘
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -70,6 +74,15 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Google Cloud                                                        │
 │   Vertex AI ── Gemini (モデルは GEMINI_MODEL で指定)                │
+│   Vertex AI ── Grounding with Google Search / YouTube の動画入力    │
+│              (カルチャー情報。services/culture.py から直接呼ぶ)     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ YouTube Data API v3  (www.googleapis.com)                           │
+│   services/youtube.py から直接呼ぶ(ADK は経由しない)                │
+│   認証は API キー(YOUTUBE_DATA_API_KEY)。例外扱い(3.4)              │
+│   videos ── URL から動画情報 / search ── MV 名から候補              │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,11 +137,12 @@ tx_hackathon_gc/
 │   │   ├── main.py           # エントリポイント(create_app)
 │   │   ├── api/
 │   │   │   ├── router.py     # ルータ集約
-│   │   │   └── routes/       # health.py, chat.py, ...
+│   │   │   └── routes/       # health.py, chat.py, youtube.py, culture.py
 │   │   ├── core/             # config.py, logging.py
-│   │   ├── schemas/          # Pydantic モデル
+│   │   ├── schemas/          # Pydantic モデル(chat.py, youtube.py, culture.py)
 │   │   ├── services/         # agent.py, agent_loop.py, verification.py, media.py,
-│   │   │                     #   cloth_index.py, wardrobe.py ほか
+│   │   │                     #   cloth_index.py, wardrobe.py, youtube.py, mv_title.py,
+│   │   │                     #   culture.py ほか
 │   │   ├── created_images/   # 生成された画像の保存先(Git 管理外)
 │   │   └── created_videos/   # 生成された動画の保存先(Git 管理外)
 │   ├── scripts/
@@ -144,7 +158,7 @@ tx_hackathon_gc/
 │   ├── lib/
 │   │   ├── main.dart
 │   │   ├── core/             # app_config.dart, api_client.dart
-│   │   └── features/         # 機能ごと(chat/ など)
+│   │   └── features/         # 機能ごと(chat/, mv_lookup/)
 │   └── test/
 ├── docs/
 │   └── spec/                 # SPEC 駆動開発のドキュメント
@@ -156,7 +170,9 @@ tx_hackathon_gc/
 │       ├── 003-media-generation-tools/
 │       ├── 004-agent-loop/
 │       ├── 005-cloth-index/
-│       └── 006-wardrobe-tools/
+│       ├── 006-wardrobe-tools/
+│       ├── 007-youtube-mv-metadata/
+│       └── 008-artist-culture-info/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
 ```
@@ -211,11 +227,18 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `LOOP_MAX_ITERATIONS` | `3` | 生成 → 検証 を繰り返す上限回数 |
 | `CLOTH_INDEX_MODEL` | `gemini-2.5-flash` | 服画像から属性を抽出するモデル |
 | `CLOTH_INDEX_PATH` | `tests/sample_cloth_indexs/index.json` | エージェントが参照する服インデックス |
+| `YOUTUBE_DATA_API_KEY` | 空 | YouTube Data API v3 の API キー(**秘匿情報**。3.4) |
+| `YOUTUBE_SEARCH_MAX_RESULTS` | `5` | MV 名で検索したときの候補数 |
+| `YOUTUBE_REGION_CODE` | `JP` | 検索結果の地域。空なら指定しない |
+| `YOUTUBE_REQUEST_TIMEOUT` | `10.0` | YouTube API の待ち時間上限(秒) |
+| `CULTURE_MODEL` | `gemini-2.5-flash` | カルチャー情報(4.9)で使うモデル。Google 検索と YouTube の動画入力に対応したものを指定する |
+| `CULTURE_TIMEOUT` | `180.0` | カルチャー情報の取得全体の待ち時間上限(秒) |
 
 ### 3.3 Google Cloud 認証(ADC)
 
 **Gemini の呼び出し認証は ADC(Application Default Credentials)を基本とする。**
 API キーやサービスアカウントキーをリポジトリや `.env` に置かない運用にするため。
+(YouTube Data API だけは ADC で呼べないため例外として API キーを使う。3.4 参照)
 
 #### 手順(初回のみ)
 
@@ -260,6 +283,28 @@ cp .env.example .env
 CI や、ADC を用意できない環境でのみ使用する。`infra/secrets/gcp-sa.json`(Git 管理外)に置き、
 `docker-compose.yml` の `GOOGLE_APPLICATION_CREDENTIALS` と `./infra/secrets` のマウント行のコメントを外す。
 Cloud Run などにデプロイする場合は、キーではなく**サービスアカウントをリソースに紐づける**方式を使う。
+
+### 3.4 YouTube Data API のキー(ADC 方針の例外)
+
+MV のメタ情報取得(4.8)で使う YouTube Data API v3 は、ADC の既定スコープ(`cloud-platform`)では呼べない。
+そのため**この API だけは API キーを使う**(3.3 の「キーを `.env` に置かない」方針の例外)。
+
+```bash
+gcloud services enable youtube.googleapis.com   # YouTube Data API v3 の有効化(初回のみ)
+```
+
+1. GCP コンソールの「API とサービス → 認証情報 → 認証情報を作成 → API キー」でキーを作る。
+2. 作ったキーの「API の制限」で **YouTube Data API v3 だけ**に制限する(漏れたときの被害を抑えるため)。
+3. `backend/.env` に書く(`.env.example` には書かない)。
+
+```bash
+YOUTUBE_DATA_API_KEY=<作成したキー>
+```
+
+- Docker Compose は `backend/.env` を `env_file` で読むため、追加の設定は不要。
+- キーはリクエストヘッダ(`X-Goog-Api-Key`)で送る。URL のクエリに載せるとリクエストログに残るため。
+- **クォータ**: 既定は 1 日 10,000 ユニット。動画情報の取得は 1 回 1 ユニット、**検索は 1 回 100 ユニット**(= 1 日およそ 100 回)。
+- デプロイ時に Secret Manager へ移すかは未決(spec 007 の未決事項 1)。
 
 ---
 
@@ -512,6 +557,102 @@ uv run python scripts/run_agent.py --index path/to/index.json -m "手持ちの�
 - 参照先は `CLOTH_INDEX_PATH`(既定 `tests/sample_cloth_indexs/index.json`)または `--index` で指定する。
 - 渡すのは属性テキストのみで、画像そのものは渡さない。
 
+### 4.8 MV の URL / 名前からメタ情報を調べる
+
+YouTube の **URL** か **MV 名**を入れると、**リンク・曲名・アーティスト名**などが揃う。
+事前に API キーを設定しておくこと(3.4)。
+
+- 画面: Web アプリ(http://localhost:8080)の下部ナビゲーション「**MV 検索**」
+- **URL を入れた場合**: その動画の情報がすぐ表示される。
+- **MV 名を入れた場合**: 検索結果が最大 5 件、候補として並ぶ。選ぶとその動画のリンクと情報が表示される。
+
+API から直接呼ぶ場合(入力は URL でも MV 名でも同じエンドポイント):
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/youtube/lookup \
+  -H "Content-Type: application/json" \
+  -d '{"query": "https://youtu.be/<動画ID>"}'
+```
+
+```json
+{
+  "input_type": "url",
+  "video": {
+    "video_id": "<動画ID>",
+    "url": "https://www.youtube.com/watch?v=<動画ID>",
+    "artist": "YOASOBI",
+    "song_title": "アイドル",
+    "title_parsed": true,
+    "title": "YOASOBI「アイドル」 Official Music Video",
+    "channel_title": "Ayase / YOASOBI",
+    "published_at": "...",
+    "thumbnail_url": "https://i.ytimg.com/...",
+    "description": "..."
+  },
+  "candidates": []
+}
+```
+
+MV 名のときは `"input_type": "keyword"`、`"video": null` で、`candidates` に候補が入る。
+候補を選んだら、その候補の `url` を `query` にして同じエンドポイントを呼ぶ。
+
+**アーティスト名・曲名の決め方**(YouTube API にはこの項目が無いため、タイトルから推定する):
+
+| タイトルの形 | 例 |
+| --- | --- |
+| `アーティスト - 曲名` | `Official髭男dism - Pretender［Official Video］` |
+| `アーティスト「曲名」` / `『曲名』` | `YOASOBI「アイドル」 Official Music Video` |
+| `アーティスト '曲名'` | `BTS (방탄소년단) 'Dynamite' Official MV` |
+| `A / B`(チャンネル名と一致する側をアーティストとする) | `【MV】夜に駆ける / YOASOBI` |
+| チャンネル名が `<アーティスト> - Topic` | タイトル = 曲名 |
+
+- `【MV】`・`(Official Music Video)` などの装飾は曲名から取り除く。
+- **どれにも当てはまらなければ、アーティスト名 = チャンネル名、曲名 = 動画タイトル(そのまま)**になり、
+  `title_parsed` が `false` になる(画面にも注記が出る)。
+- 対応する URL: `youtube.com/watch?v=` / `youtu.be/` / `m.youtube.com` / `music.youtube.com` /
+  `/shorts/` / `/embed/` / `/live/`(`&t=` / `&list=` / `?si=` などは無視)。再生リスト・チャンネルの URL は 400。
+- 入力中に自動で検索はしない(検索は 1 回 100 ユニット消費するため。3.4)。
+- 分解のルールを変えるときは [app/services/mv_title.py](backend/app/services/mv_title.py) を直す。
+  詳細は [docs/spec/007-youtube-mv-metadata/design.md](docs/spec/007-youtube-mv-metadata/design.md)。
+
+### 4.9 アーティストのカルチャー情報を調べる
+
+4.8 で動画情報が表示されると(URL を入れたとき・候補を選んだとき)、**操作しなくても自動で**
+Gemini がそのアーティストのカルチャー情報を調べ、動画情報の下に表示する。
+
+| 分類 | 内容 | 根拠 |
+| --- | --- | --- |
+| ファッション・ビジュアル | スタイルの傾向・よく使う色・定番のアイテム・世界観 | Google 検索 |
+| この MV の衣装 | MV で着ている服(種類・色・系統など。服インデックスと同じ項目) | **MV の映像** |
+| 経歴・音楽性 | 概要・活動の歩み・ジャンル・代表曲・音楽的な特徴 | Google 検索 |
+| 出典 / 検索候補 | 参照したページと、Google の検索候補 | Google 検索 |
+
+- **調べている間(数十秒。`gemini-2.5-flash` で 3 分台の MV なら約 50 秒)は MV 検索画面の入力を受け付けない**
+  (入力欄・検索ボタン・候補・「候補一覧に戻る」)。
+- 1 回の取得で Gemini を 3 回呼ぶ。① Google 検索ありで調べる → ② 検索なしで項目ごとに整理する、
+  と並行して ③ MV の映像(YouTube の URL をそのまま渡す)から衣装を読み取る。
+- **結果は保存しない**(Google 検索のグラウンディング結果の保存は利用規約上の問題になるおそれがあるため)。
+  同じアーティストでも、動画を表示するたびに調べ直し、そのたびに検索の料金がかかる。
+- 映像を解析できるのは**公開動画だけ**。非公開・限定公開・年齢制限のある動画では「この MV の衣装」だけが出ない。
+- 音楽と関係のない動画などでアーティストを特定できないときは、推測で埋めずに「特定できませんでした」と出す。
+- 失敗したときは動画情報は残り、カルチャー情報の欄に「再試行」ボタンが出る(自動では再試行しない)。
+- 出典の URL は Google のリダイレクト用 URL(`vertexaisearch.cloud.google.com/grounding-api-redirect/…`)になる。
+  タイトルにはドメイン名が入ることが多い。
+- **Google の検索候補(Search Suggestions)は利用条件により表示が必須**。API が返す HTML を加工せずに表示している。
+  Web 以外(モバイル)では HTML を描画できないため検索クエリを文字で出している。**モバイル向けに公開する場合は
+  WebView などで HTML を表示する対応が必要**(spec 008 の未決事項 1)。
+
+API から直接呼ぶ場合は、4.8 で得た `video` をそのまま送る:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/culture/research \
+  -H "Content-Type: application/json" \
+  -d '{"video": { ...4.8 の video... }}'
+```
+
+応答の形は [docs/spec/008-artist-culture-info/design.md](docs/spec/008-artist-culture-info/design.md) の 3. を参照。
+プロンプトを変えるときは [app/services/culture.py](backend/app/services/culture.py) を直す。
+
 ---
 
 ## 5. テスト / 静的解析
@@ -551,7 +692,8 @@ flutter test                     # テスト
 
 - ローカルで mypy が動かない環境でも、**型チェックは push 後に CI が必ず実行する**。
 - 依存は `uv.lock` / `pubspec.lock` に固定され、CI はキャッシュを使って再現性のある環境で検証する。
-- 外部 API(Gemini)は呼ばない。テストは全てスタブで完結させること。
+- 外部 API(Gemini / YouTube)は呼ばない。テストは全てスタブで完結させること
+  (YouTube API は `httpx.MockTransport` で差し替える。[backend/tests/youtube_stub.py](backend/tests/youtube_stub.py))。
 - **ステータスチェック名 = ジョブの `name:`**。ルールセット(5.3)で指定するため、
   `backend` / `frontend` / `docker` の 3 つは安易に変更しない。変更する場合はルールセット側も直す。
 
@@ -616,6 +758,8 @@ docs/spec/001-user-authentication/
 | [004-agent-loop](docs/spec/004-agent-loop/) | エージェントループ(生成 → 検証 → 再生成) | done |
 | [005-cloth-index](docs/spec/005-cloth-index/) | 服画像から属性インデックスを作成 | done |
 | [006-wardrobe-tools](docs/spec/006-wardrobe-tools/) | 服インデックスをエージェントから参照(ツール) | done |
+| [007-youtube-mv-metadata](docs/spec/007-youtube-mv-metadata/) | YouTube の MV からメタ情報(アーティスト名・曲名など)を取得 | done |
+| [008-artist-culture-info](docs/spec/008-artist-culture-info/) | アーティストのカルチャー情報(ファッション・経歴・MV の衣装)を Gemini + Google 検索 + 映像解析で調べて整理 | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
 
 ---
 
@@ -817,6 +961,15 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | `is only supported in the Interactions API` | `gemini-omni-*` を `generateContent` で呼んでいる。`client.interactions.create()` を使う |
 | 画像生成の応答にファイル名が出ない | `GEMINI_SYSTEM_INSTRUCTION` を上書きしても、ツール利用の指示は `agent.py` の `TOOL_GUIDELINE` が付与する。モデルを変えた場合は追従を確認する |
 | Flutter コンテナのビルドが遅い | 開発中はネイティブ起動(4.2)を使い、compose は結合確認時に使う |
+| `YOUTUBE_DATA_API_KEY が未設定です`(502) | `backend/.env` にキーを設定する(3.4)。compose の場合はコンテナを作り直す(`docker compose up -d --force-recreate backend`) |
+| `YouTube API の認証に失敗しました`(502) | キーの誤り、YouTube Data API v3 が未有効化(`gcloud services enable youtube.googleapis.com`)、またはキーの「API の制限」に YouTube Data API v3 が入っていない |
+| `YouTube API のクォータ(1 日の利用上限)を超えました`(503) | 1 日の上限(既定 10,000 ユニット。検索は 1 回 100)を使い切った。日付が変わる(太平洋時間の 0 時)のを待つ。使用量は GCP コンソールの「API とサービス → YouTube Data API v3 → 割り当て」で確認できる |
+| カルチャー情報が `… 秒以内に終わりませんでした`(504) | 映像の解析に時間がかかっている。`CULTURE_TIMEOUT` を延ばすか、時間をおいて再試行する |
+| カルチャー情報が `Gemini のクォータ(利用上限)を超えました`(503) | `CULTURE_MODEL` のクォータ超過。時間をおくか、別のモデルに変える |
+| カルチャー情報が `Web での調査に失敗しました`(502) | `CULTURE_MODEL` が Google 検索(グラウンディング)に対応していない可能性がある。対応モデル(`gemini-2.5-flash` など)を指定する |
+| 「この MV の衣装」だけが `映像を解析できませんでした` | 非公開・限定公開・年齢制限のある動画は解析できない。公開動画でも出る場合は、`CULTURE_MODEL` が YouTube の動画入力に対応しているか確認する(Vertex AI ではプレビュー機能) |
+| 検索候補が文字(検索クエリ)で表示される | Web 以外で実行している。検索候補の HTML は Web でのみ描画する(4.9) |
+| MV 検索でサムネイルが出ずアイコンになる | 画像の読み込みに失敗している。Flutter Web で CORS に引っかかる場合は `<img>` 表示に切り替える設定済み(`WebHtmlElementStrategy.fallback`)。ブラウザの開発者ツールでネットワークエラーを確認する |
 | compose で `http://localhost:8080` が白画面 | フロントを debug で起動している。compose は `--release` 必須(4.1)。debug だと DWDS が `Bad state: Not connected to an application` を返し続け、`main()` が起動しない。ブラウザのコンソールに同エラーが並ぶのが目印 |
 
 ---

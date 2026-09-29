@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'features/chat/chat_screen.dart';
+import 'features/mv_lookup/mv_lookup_screen.dart';
 
 void main() {
   runApp(const App());
@@ -17,7 +18,47 @@ class App extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const ChatScreen(),
+      home: const HomeShell(),
+    );
+  }
+}
+
+/// 機能ごとの画面を下部のナビゲーションで切り替える。
+///
+/// [IndexedStack] で各画面の状態(入力中の内容や結果)を切り替え後も保つ。
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key});
+
+  @override
+  State<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends State<HomeShell> {
+  int _index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _index,
+        children: const [MvLookupScreen(), ChatScreen()],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (index) => setState(() => _index = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.music_video_outlined),
+            selectedIcon: Icon(Icons.music_video),
+            label: 'MV 検索',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'チャット',
+          ),
+        ],
+      ),
     );
   }
 }

@@ -64,6 +64,21 @@ class Settings(BaseSettings):
     # エージェントが参照する服インデックス(backend/ からの相対パス)
     cloth_index_path: str = "tests/sample_cloth_indexs/index.json"
 
+    # --- YouTube Data API ---
+    # 【例外】API キーを使う。YouTube Data API は ADC の既定スコープ(cloud-platform)では呼べないため
+    youtube_data_api_key: str = ""
+    # MV 名で検索したときの候補数(検索は 1 回 100 ユニット消費する)
+    youtube_search_max_results: int = 5
+    # 検索結果の地域(ISO 3166-1 alpha-2)。空なら指定しない
+    youtube_region_code: str = "JP"
+    youtube_request_timeout: float = 10.0
+
+    # --- アーティストのカルチャー情報(spec 008) ---
+    # Google 検索(グラウンディング)と YouTube の動画入力に対応したモデルを指定する
+    culture_model: str = "gemini-2.5-flash"
+    # 調査・整理・MV の映像の解析を合わせた待ち時間の上限(秒)
+    culture_timeout: float = 180.0
+
     gemini_system_instruction: str = "あなたは日本語で簡潔かつ正確に回答するアシスタントです。"
 
     @property
