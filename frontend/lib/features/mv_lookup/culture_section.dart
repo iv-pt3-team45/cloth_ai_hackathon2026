@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'culture_models.dart';
-import 'search_suggestions_view.dart';
+import 'grounding_footer.dart';
 
 /// 動画のアーティストのカルチャー情報(spec 008)を表示する。
 ///
@@ -111,7 +111,11 @@ class _Unidentified extends StatelessWidget {
         const SizedBox(height: 4),
         Text(report.message),
         // 検索は実行されているため、出典と検索候補は表示する
-        ..._groundingFooter(report),
+        GroundingFooter(
+          sources: report.sources,
+          searchSuggestionsHtml: report.searchSuggestionsHtml,
+          webSearchQueries: report.webSearchQueries,
+        ),
       ],
     );
   }
@@ -148,27 +152,15 @@ class _Report extends StatelessWidget {
         _Bullets(label: '代表曲', values: background.representativeSongs),
         _Paragraph(label: '音楽的な特徴', text: background.musicalTraits),
         _Citations(indices: background.sourceIndices),
-        ..._groundingFooter(report),
+        GroundingFooter(
+          sources: report.sources,
+          searchSuggestionsHtml: report.searchSuggestionsHtml,
+          webSearchQueries: report.webSearchQueries,
+        ),
       ],
     );
   }
 }
-
-/// 出典の一覧と検索候補。Grounding with Google Search の利用条件により表示する。
-List<Widget> _groundingFooter(CultureReport report) => [
-  if (report.sources.isNotEmpty) ...[
-    _Heading('出典'),
-    for (final source in report.sources) _SourceTile(source: source),
-  ],
-  if (report.searchSuggestionsHtml.isNotEmpty ||
-      report.webSearchQueries.isNotEmpty) ...[
-    const SizedBox(height: 12),
-    SearchSuggestionsView(
-      html: report.searchSuggestionsHtml,
-      queries: report.webSearchQueries,
-    ),
-  ],
-];
 
 class _Heading extends StatelessWidget {
   const _Heading(this.text);
@@ -315,30 +307,5 @@ class _Outfit extends StatelessWidget {
         ? item.category
         : '${item.category}(${details.join(' / ')})';
     return item.notes.isEmpty ? head : '$head ${item.notes}';
-  }
-}
-
-class _SourceTile extends StatelessWidget {
-  const _SourceTile({required this.source});
-
-  final CultureSource source;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    // Vertex AI はタイトルにドメイン名を入れて返すことがあるため、同じなら重ねて出さない
-    final domain = source.domain.isEmpty || source.domain == source.title
-        ? ''
-        : '(${source.domain})';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('[${source.index}] ${source.title}$domain'),
-          SelectableText(source.url, style: textTheme.bodySmall),
-        ],
-      ),
-    );
   }
 }

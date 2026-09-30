@@ -13,11 +13,9 @@
 
 import asyncio
 import logging
-from collections.abc import Sequence
-from dataclasses import dataclass, field
 
 from google import genai
-from google.genai import errors, types
+from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings, get_settings
@@ -28,18 +26,24 @@ from app.schemas.culture import (
     MvOutfit,
     OutfitItem,
     OutfitLook,
-    Source,
 )
 from app.schemas.youtube import VideoInfo
 from app.services.cloth_index import ClothItem
+from app.services.grounding import (
+    NO_AFC,
+    WebResearch,
+    clean_list,
+    clean_text,
+    grounded_research,
+    is_quota_error,
+    valid_indices,
+)
 from app.services.media import get_media_client
 
 logger = logging.getLogger(__name__)
 
 # プロンプトが膨らむのを防ぐため、概要欄は先頭だけを渡す
 MAX_DESCRIPTION_CHARS = 1500
-# 「情報なし」とだけ書かれた項目は空として扱う
-_NO_INFO = {"", "情報なし", "不明", "なし"}
 
 _STRUCTURE_INSTRUCTION = """\
 あなたは調査メモを整理する編集者です。調査メモの内容を、指定された JSON の形に整理してください。
@@ -120,17 +124,6 @@ class VideoOutfitAnalysis(BaseModel):
     summary: str = Field(description="衣装全体の印象")
 
 
-@dataclass
-class WebResearch:
-    """1. 調べる の結果。"""
-
-    # 出典番号 [n] を差し込んだ本文
-    text: str
-    sources: list[Source] = field(default_factory=list)
-    search_suggestions_html: str = ""
-    web_search_queries: list[str] = field(default_factory=list)
-
-
 # --- プロンプトの組み立て --------------------------------------------------
 
 
@@ -189,94 +182,11 @@ def build_outfit_parts(video_url: str) -> list[types.Part]:
     ]
 
 
-# --- グラウンディングの結果の取り出し --------------------------------------
-
-
-def insert_citations(
-    text: str,
-    supports: Sequence[types.GroundingSupport],
-    chunk_to_index: dict[int, int],
-) -> str:
-    """本文の根拠のある箇所の直後に、出典番号 `[n]` を差し込む。
-
-    `segment.start_index` / `end_index` は位置の数え方(文字 / バイト)に依存するため使わず、
-    `segment.text` を本文から探す(日本語の本文でもずれないようにするため)。
-    """
-    insertions: list[tuple[int, str]] = []
-    for support in supports:
-        segment = support.segment.text if support.segment else None
-        if not segment:
-            continue
-        position = text.find(segment)
-        numbers = sorted(
-            {
-                chunk_to_index[i]
-                for i in support.grounding_chunk_indices or []
-                if i in chunk_to_index
-            }
-        )
-        if position < 0 or not numbers:
-            continue
-        insertions.append((position + len(segment), "".join(f"[{n}]" for n in numbers)))
-
-    # 後ろから差し込めば、前の差し込み位置がずれない
-    for end, marker in sorted(insertions, reverse=True):
-        text = text[:end] + marker + text[end:]
-    return text
-
-
-def extract_research(response: types.GenerateContentResponse) -> WebResearch:
-    """1. 調べる の応答から、本文・出典・検索候補・検索クエリを取り出す。"""
-    text = response.text or ""
-    candidates = response.candidates or []
-    metadata = candidates[0].grounding_metadata if candidates else None
-    if metadata is None:
-        return WebResearch(text=text)
-
-    sources: list[Source] = []
-    chunk_to_index: dict[int, int] = {}
-    for i, chunk in enumerate(metadata.grounding_chunks or []):
-        web = chunk.web
-        if web is None or not web.uri:
-            continue
-        number = len(sources) + 1
-        chunk_to_index[i] = number
-        sources.append(
-            Source(
-                index=number,
-                title=web.title or web.domain or web.uri,
-                url=web.uri,
-                domain=web.domain or "",
-            )
-        )
-
-    entry_point = metadata.search_entry_point
-    return WebResearch(
-        text=insert_citations(text, metadata.grounding_supports or [], chunk_to_index),
-        sources=sources,
-        search_suggestions_html=(entry_point.rendered_content or "") if entry_point else "",
-        web_search_queries=list(metadata.web_search_queries or []),
-    )
-
-
-def valid_indices(indices: Sequence[int], source_count: int) -> list[int]:
-    """出典番号のうち、実在する出典(1〜source_count)を指すものだけを重複なく返す。"""
-    return sorted({i for i in indices if 1 <= i <= source_count})
-
-
-def _clean(values: Sequence[str]) -> list[str]:
-    return [v.strip() for v in values if v.strip() not in _NO_INFO]
-
-
-def _text(value: str) -> str:
-    return "" if value.strip() in _NO_INFO else value.strip()
-
-
 def to_culture_error(exc: Exception, action: str) -> CultureError:
     """Gemini の例外を業務例外に変換する。"""
     if isinstance(exc, CultureError):
         return exc
-    if isinstance(exc, errors.APIError) and (exc.code == 429 or exc.status == "RESOURCE_EXHAUSTED"):
+    if is_quota_error(exc):
         return CultureQuotaError(
             "Gemini のクォータ(利用上限)を超えました。時間をおいて再度お試しください。"
         )
@@ -293,23 +203,23 @@ def build_response(
     if structured.identified:
         message = ""
         fashion_info = FashionInfo(
-            styles=_clean(fashion.styles),
-            colors=_clean(fashion.colors),
-            items=_clean(fashion.items),
-            worldview=_text(fashion.worldview),
+            styles=clean_list(fashion.styles),
+            colors=clean_list(fashion.colors),
+            items=clean_list(fashion.items),
+            worldview=clean_text(fashion.worldview),
             source_indices=valid_indices(fashion.source_indices, count),
         )
         background_info = BackgroundInfo(
-            summary=_text(background.summary),
-            history=_clean(background.history),
-            genres=_clean(background.genres),
-            representative_songs=_clean(background.representative_songs),
-            musical_traits=_text(background.musical_traits),
+            summary=clean_text(background.summary),
+            history=clean_list(background.history),
+            genres=clean_list(background.genres),
+            representative_songs=clean_list(background.representative_songs),
+            musical_traits=clean_text(background.musical_traits),
             source_indices=valid_indices(background.source_indices, count),
         )
     else:
         # 音楽と関係ない動画などでは、推測で埋めないよう各項目も衣装の解析結果も使わない
-        message = _text(structured.message) or "アーティストを特定できませんでした。"
+        message = clean_text(structured.message) or "アーティストを特定できませんでした。"
         fashion_info, background_info = FashionInfo(), BackgroundInfo()
         outfit = MvOutfit(status="skipped", message="アーティストを特定できなかったため")
 
@@ -368,21 +278,13 @@ class CultureService:
 
     async def _research_web(self, client: genai.Client, video: VideoInfo) -> WebResearch:
         try:
-            response = await client.aio.models.generate_content(
-                model=self._settings.culture_model,
-                contents=build_research_prompt(video),
-                config=types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                    # Google 検索は関数呼び出しではないため、SDK の自動関数呼び出しは使わない
-                    # (有効のままだと使わない機能についての警告が毎回出る)
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                ),
+            research = await grounded_research(
+                client, self._settings.culture_model, build_research_prompt(video)
             )
         except Exception as exc:
             logger.warning("Web での調査に失敗しました: %s", type(exc).__name__)
             raise to_culture_error(exc, "Web での調査") from exc
 
-        research = extract_research(response)
         if not research.text.strip():
             raise CultureError("Web での調査結果が空でした。")
         return research
@@ -398,6 +300,7 @@ class CultureService:
                     system_instruction=_STRUCTURE_INSTRUCTION,
                     response_mime_type="application/json",
                     response_schema=StructuredCulture,
+                    automatic_function_calling=NO_AFC,
                     temperature=0,
                 ),
             )
@@ -427,6 +330,7 @@ class CultureService:
                     system_instruction=_OUTFIT_INSTRUCTION,
                     response_mime_type="application/json",
                     response_schema=VideoOutfitAnalysis,
+                    automatic_function_calling=NO_AFC,
                     media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW,
                 ),
             )

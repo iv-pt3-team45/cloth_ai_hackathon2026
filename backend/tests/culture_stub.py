@@ -1,12 +1,7 @@
-"""カルチャー情報のテスト用スタブ。Gemini は呼ばない。"""
+"""カルチャー情報(spec 008)のテスト用スタブ。Gemini は呼ばない。"""
 
-import inspect
-from collections.abc import Callable
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import Any
-
-from google.genai import types
 
 from app.core.config import Settings
 from app.schemas.youtube import VideoInfo
@@ -19,11 +14,21 @@ from app.services.culture import (
     _FashionOutput,
     _LookOutput,
 )
+from tests.gemini_stub import (
+    SUGGESTIONS_HTML,
+    Responder,
+    calls_of,
+    grounded_response,
+    parsed_response,
+    uses_search,
+)
+from tests.gemini_stub import make_client as _make_client
+
+__all__ = ["SUGGESTIONS_HTML", "calls_of"]
 
 SENTENCE_1 = "YOASOBI は 2019 年に結成された音楽ユニットです。"
 SENTENCE_2 = "衣装は黒と白を基調にしています。"
 RESEARCH_TEXT = SENTENCE_1 + SENTENCE_2
-SUGGESTIONS_HTML = "<style>.x{}</style><div class='container'>検索候補</div>"
 
 
 def make_video(**overrides: Any) -> VideoInfo:
@@ -44,37 +49,11 @@ def make_video(**overrides: Any) -> VideoInfo:
 
 
 def research_response(text: str = RESEARCH_TEXT, grounded: bool = True) -> Any:
-    metadata = types.GroundingMetadata(
-        grounding_chunks=[
-            types.GroundingChunk(
-                web=types.GroundingChunkWeb(
-                    uri="https://example.com/a", title="記事A", domain="example.com"
-                )
-            ),
-            types.GroundingChunk(
-                web=types.GroundingChunkWeb(
-                    uri="https://example.org/b", title="記事B", domain="example.org"
-                )
-            ),
-        ],
-        grounding_supports=[
-            types.GroundingSupport(
-                segment=types.Segment(text=SENTENCE_1), grounding_chunk_indices=[0]
-            ),
-            types.GroundingSupport(
-                segment=types.Segment(text=SENTENCE_2), grounding_chunk_indices=[1, 0]
-            ),
-        ],
-        search_entry_point=types.SearchEntryPoint(rendered_content=SUGGESTIONS_HTML),
-        web_search_queries=["YOASOBI ファッション", "YOASOBI 経歴"],
-    )
-    return types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(role="model", parts=[types.Part(text=text)]),
-                grounding_metadata=metadata if grounded else None,
-            )
-        ]
+    return grounded_response(
+        text,
+        supports=[(SENTENCE_1, [0]), (SENTENCE_2, [1, 0])],
+        queries=["YOASOBI ファッション", "YOASOBI 経歴"],
+        grounded=grounded,
     )
 
 
@@ -127,49 +106,26 @@ def outfit_analysis() -> VideoOutfitAnalysis:
 
 def kind(call: dict[str, Any]) -> str:
     """呼び出しがどの段階(research / structure / outfit)かを設定から判定する。"""
-    config: types.GenerateContentConfig = call["config"]
-    if config.tools:
+    if uses_search(call):
         return "research"
-    if config.response_schema is StructuredCulture:
+    if call["config"].response_schema is StructuredCulture:
         return "structure"
     return "outfit"
-
-
-Responder = Callable[[dict[str, Any]], Any]
 
 
 def default_responder(call: dict[str, Any]) -> Any:
     return {
         "research": lambda: research_response(),
-        "structure": lambda: types.GenerateContentResponse(parsed=structured()),
-        "outfit": lambda: types.GenerateContentResponse(parsed=outfit_analysis()),
+        "structure": lambda: parsed_response(structured()),
+        "outfit": lambda: parsed_response(outfit_analysis()),
     }[kind(call)]()
 
 
-class FakeModels:
-    def __init__(self, respond: Responder) -> None:
-        self.calls: list[dict[str, Any]] = []
-        self._respond = respond
-
-    async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
-        call = {"model": model, "contents": contents, "config": config}
-        self.calls.append(call)
-        result = self._respond(call)
-        if inspect.isawaitable(result):
-            result = await result
-        return result
-
-
 def make_client(respond: Responder = default_responder) -> Any:
-    """`client.aio.models.generate_content` だけを持つフェイク。"""
-    return SimpleNamespace(aio=SimpleNamespace(models=FakeModels(respond)))
+    return _make_client(respond)
 
 
 def make_service(client: Any, **settings: Any) -> CultureService:
     values: dict[str, Any] = {"culture_model": "test-model", "culture_timeout": 5}
     values.update(settings)
     return CultureService(settings=Settings(**values), client=client)
-
-
-def calls_of(client: Any) -> list[dict[str, Any]]:
-    return client.aio.models.calls

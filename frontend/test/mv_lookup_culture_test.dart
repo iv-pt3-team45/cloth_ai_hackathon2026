@@ -26,6 +26,12 @@ const _candidates = [
     title: 'YOASOBI「アイドル」 Official Music Video',
     channelTitle: 'YOASOBI',
   ),
+  MvCandidate(
+    videoId: 'zyxWVU98765',
+    url: 'https://www.youtube.com/watch?v=zyxWVU98765',
+    title: 'アイドル LIVE映像',
+    channelTitle: 'YOASOBI',
+  ),
 ];
 
 /// URL なら動画、それ以外なら候補を返す(URL の末尾 11 文字を動画 ID とみなす)。
@@ -49,7 +55,11 @@ Future<void> _pumpScreen(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
-      home: MvLookupScreen(repository: repo, cultureRepository: culture),
+      home: MvLookupScreen(
+        repository: repo,
+        cultureRepository: culture,
+        liveRepository: FakeLiveRepository(),
+      ),
     ),
   );
 }
@@ -57,7 +67,7 @@ Future<void> _pumpScreen(
 /// 入力して実行する。カルチャー情報の取得中はローディングが回り続けるため
 /// pumpAndSettle は使わない。
 Future<void> _submit(WidgetTester tester, String query) async {
-  await tester.enterText(find.byType(TextField), query);
+  await tester.enterText(find.byKey(mvQueryFieldKey), query);
   // 検索クエリのチップにも検索アイコンがあるため、ボタンに絞って押す
   await tester.tap(find.widgetWithIcon(IconButton, Icons.search));
   await tester.pump();
@@ -65,7 +75,7 @@ Future<void> _submit(WidgetTester tester, String query) async {
 }
 
 bool _inputEnabled(WidgetTester tester) =>
-    tester.widget<TextField>(find.byType(TextField)).enabled ?? true;
+    tester.widget<TextField>(find.byKey(mvQueryFieldKey)).enabled ?? true;
 
 VoidCallback? _searchButton(WidgetTester tester) => tester
     .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.search))
@@ -95,10 +105,17 @@ void main() {
     expect(_searchButton(tester), isNotNull);
   });
 
-  testWidgets('候補を選ぶと自動で取得が始まり、取得中は「候補一覧に戻る」を押せない(AC-1, AC-2)', (tester) async {
+  testWidgets('候補を選ぶと自動で取得が始まり、取得中は他の候補を押せない(008 AC-1, AC-2 / 009 AC-4)', (
+    tester,
+  ) async {
     final pending = Completer<CultureReport>();
-    final culture = FakeCultureRepository((video) => pending.future);
-    await _pumpScreen(tester, _mvRepository(), culture);
+    final culture = FakeCultureRepository(
+      (video) => video.videoId == 'abcDEF12345'
+          ? pending.future
+          : Future.value(fullReport),
+    );
+    final repo = _mvRepository();
+    await _pumpScreen(tester, repo, culture);
 
     await _submit(tester, 'アイドル');
     expect(culture.videos, isEmpty); // 候補を眺めるだけでは呼ばない
@@ -108,19 +125,35 @@ void main() {
     await tester.pump();
 
     expect(culture.videos.single.videoId, 'abcDEF12345');
-    TextButton back() => tester.widget<TextButton>(
-      find.ancestor(
-        of: find.text('候補一覧に戻る'),
-        matching: find.byWidgetPredicate((w) => w is TextButton),
-      ),
-    );
-    expect(back().enabled, isFalse);
     expect(_inputEnabled(tester), isFalse);
+
+    // 取得中は他の候補を押しても反応しない
+    await tester.tap(find.text('アイドル LIVE映像'));
+    await tester.pump();
+    expect(repo.queries, hasLength(2));
+    expect(culture.videos, hasLength(1));
 
     pending.complete(fullReport);
     await tester.pumpAndSettle();
 
-    expect(back().enabled, isTrue);
+    // 取得が終われば別の候補を選べ、前の展開は閉じて取得し直す(009 AC-2)
+    await tester.tap(find.text('アイドル LIVE映像'));
+    await tester.pumpAndSettle();
+
+    expect(culture.videos.map((v) => v.videoId), [
+      'abcDEF12345',
+      'zyxWVU98765',
+    ]);
+    // 展開していない候補(1 件目)だけが右向きの矢印になる
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(
+      find.text('https://www.youtube.com/watch?v=zyxWVU98765'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('https://www.youtube.com/watch?v=abcDEF12345'),
+      findsNothing,
+    );
   });
 
   testWidgets('取得が終わると項目ごとに整理して、出典と検索候補も表示する(AC-3, AC-4, AC-5)', (

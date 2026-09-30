@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     # 調査・整理・MV の映像の解析を合わせた待ち時間の上限(秒)
     culture_timeout: float = 180.0
 
+    # --- ライブ情報の検索(spec 009) ---
+    # Google 検索(グラウンディング)に対応したモデルを指定する
+    live_search_model: str = "gemini-2.5-flash"
+    # 調査・整理を合わせた待ち時間の上限(秒)
+    live_search_timeout: float = 120.0
+
     gemini_system_instruction: str = "あなたは日本語で簡潔かつ正確に回答するアシスタントです。"
 
     @property

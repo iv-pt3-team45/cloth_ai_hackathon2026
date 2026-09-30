@@ -1,3 +1,5 @@
+import 'utils.dart';
+
 /// アーティストのカルチャー情報(spec 008)。バックエンドの CultureResponse と対応する。
 class CultureReport {
   const CultureReport({
@@ -38,14 +40,14 @@ class CultureReport {
     artist: json['artist'] as String? ?? '',
     identified: json['identified'] as bool? ?? false,
     message: json['message'] as String? ?? '',
-    fashion: FashionInfo.fromJson(_map(json['fashion'])),
-    background: BackgroundInfo.fromJson(_map(json['background'])),
-    mvOutfit: MvOutfit.fromJson(_map(json['mv_outfit'])),
-    sources: _list(
+    fashion: FashionInfo.fromJson(jsonMap(json['fashion'])),
+    background: BackgroundInfo.fromJson(jsonMap(json['background'])),
+    mvOutfit: MvOutfit.fromJson(jsonMap(json['mv_outfit'])),
+    sources: jsonList(
       json['sources'],
-    ).map((s) => CultureSource.fromJson(_map(s))).toList(),
+    ).map((s) => CultureSource.fromJson(jsonMap(s))).toList(),
     searchSuggestionsHtml: json['search_suggestions_html'] as String? ?? '',
-    webSearchQueries: _strings(json['web_search_queries']),
+    webSearchQueries: jsonStrings(json['web_search_queries']),
     model: json['model'] as String? ?? '',
   );
 }
@@ -70,11 +72,11 @@ class FashionInfo {
       styles.isEmpty && colors.isEmpty && items.isEmpty && worldview.isEmpty;
 
   factory FashionInfo.fromJson(Map<String, dynamic> json) => FashionInfo(
-    styles: _strings(json['styles']),
-    colors: _strings(json['colors']),
-    items: _strings(json['items']),
+    styles: jsonStrings(json['styles']),
+    colors: jsonStrings(json['colors']),
+    items: jsonStrings(json['items']),
     worldview: json['worldview'] as String? ?? '',
-    sourceIndices: _ints(json['source_indices']),
+    sourceIndices: jsonInts(json['source_indices']),
   );
 }
 
@@ -105,11 +107,11 @@ class BackgroundInfo {
 
   factory BackgroundInfo.fromJson(Map<String, dynamic> json) => BackgroundInfo(
     summary: json['summary'] as String? ?? '',
-    history: _strings(json['history']),
-    genres: _strings(json['genres']),
-    representativeSongs: _strings(json['representative_songs']),
+    history: jsonStrings(json['history']),
+    genres: jsonStrings(json['genres']),
+    representativeSongs: jsonStrings(json['representative_songs']),
     musicalTraits: json['musical_traits'] as String? ?? '',
-    sourceIndices: _ints(json['source_indices']),
+    sourceIndices: jsonInts(json['source_indices']),
   );
 }
 
@@ -131,9 +133,9 @@ class MvOutfit {
   factory MvOutfit.fromJson(Map<String, dynamic> json) => MvOutfit(
     status: json['status'] as String? ?? 'skipped',
     message: json['message'] as String? ?? '',
-    looks: _list(
+    looks: jsonList(
       json['looks'],
-    ).map((l) => OutfitLook.fromJson(_map(l))).toList(),
+    ).map((l) => OutfitLook.fromJson(jsonMap(l))).toList(),
   );
 }
 
@@ -146,9 +148,9 @@ class OutfitLook {
 
   factory OutfitLook.fromJson(Map<String, dynamic> json) => OutfitLook(
     label: json['label'] as String? ?? '',
-    items: _list(
+    items: jsonList(
       json['items'],
-    ).map((i) => OutfitItem.fromJson(_map(i))).toList(),
+    ).map((i) => OutfitItem.fromJson(jsonMap(i))).toList(),
   );
 }
 
@@ -176,7 +178,7 @@ class OutfitItem {
     category: json['category'] as String? ?? '',
     material: json['material'] as String? ?? '',
     shape: json['shape'] as String? ?? '',
-    colors: _strings(json['colors']),
+    colors: jsonStrings(json['colors']),
     pattern: json['pattern'] as String? ?? '',
     style: json['style'] as String? ?? '',
     notes: json['notes'] as String? ?? '',
@@ -204,13 +206,3 @@ class CultureSource {
     domain: json['domain'] as String? ?? '',
   );
 }
-
-Map<String, dynamic> _map(Object? value) =>
-    value is Map<String, dynamic> ? value : const {};
-
-List<dynamic> _list(Object? value) => value is List ? value : const [];
-
-List<String> _strings(Object? value) =>
-    _list(value).whereType<String>().toList();
-
-List<int> _ints(Object? value) => _list(value).whereType<int>().toList();

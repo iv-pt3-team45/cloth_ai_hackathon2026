@@ -1,7 +1,83 @@
 import 'package:tx_hackathon_gc/features/mv_lookup/culture_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/culture_repository.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/live_models.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/live_repository.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_repository.dart';
+
+/// ライブ情報の検索条件(フェイクが受け取った値)。
+typedef LiveRequest = ({String query, DateTime? date, String? artist});
+
+/// Gemini(バックエンド)を呼ばないライブ情報のリポジトリ。受け取った条件を記録する。
+class FakeLiveRepository implements LiveRepository {
+  FakeLiveRepository([this.respond = _threeLives]);
+
+  final Future<LiveSearchResult> Function(LiveRequest request) respond;
+  final requests = <LiveRequest>[];
+
+  @override
+  Future<LiveSearchResult> search({
+    required String query,
+    DateTime? date,
+    String? artist,
+  }) {
+    final request = (query: query, date: date, artist: artist);
+    requests.add(request);
+    return respond(request);
+  }
+}
+
+Future<LiveSearchResult> _threeLives(LiveRequest request) async =>
+    liveResult(artistKnown: request.artist != null);
+
+/// 3 件の候補(過去の実績 / 予報 / 予報がまだ無い)。
+LiveSearchResult liveResult({bool artistKnown = true}) => LiveSearchResult(
+  artist: artistKnown ? 'YOASOBI' : '',
+  found: true,
+  candidates: [
+    LiveCandidate(
+      index: 1,
+      artist: artistKnown ? null : 'YOASOBI',
+      liveName: '公演A',
+      venue: 'さいたまスーパーアリーナ',
+      location: '埼玉県さいたま市',
+      date: DateTime(2023, 6, 4),
+      weather: const LiveWeather(
+        kind: 'actual',
+        summary: '晴れ',
+        highC: 27,
+        lowC: 18,
+      ),
+      sourceIndices: const [1],
+    ),
+    LiveCandidate(
+      index: 2,
+      artist: artistKnown ? null : 'YOASOBI',
+      liveName: '公演B',
+      venue: '東京ドーム',
+      location: '東京都文京区',
+      date: DateTime(2026, 10, 3),
+      weather: const LiveWeather(
+        kind: 'forecast',
+        summary: '雨',
+        precipitationChance: 80,
+      ),
+    ),
+    LiveCandidate(
+      index: 3,
+      artist: artistKnown ? null : 'YOASOBI',
+      liveName: '公演C',
+      venue: '京セラドーム大阪',
+      date: DateTime(2027, 1, 10),
+      weather: const LiveWeather(kind: 'not_yet'),
+    ),
+  ],
+  sources: const [
+    CultureSource(index: 1, title: 'ライブ記事', url: 'https://example.com/live'),
+  ],
+  searchSuggestionsHtml: '<div>検索候補</div>',
+  webSearchQueries: const ['YOASOBI ライブ 2023'],
+);
 
 /// バックエンドを呼ばないテスト用リポジトリ。受け取った query を記録する。
 class FakeMvRepository implements MvRepository {

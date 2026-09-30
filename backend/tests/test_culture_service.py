@@ -13,14 +13,9 @@ from app.services.culture import (
     CultureQuotaError,
     CultureTimeoutError,
     build_research_prompt,
-    extract_research,
-    insert_citations,
-    valid_indices,
 )
 from tests.culture_stub import (
-    RESEARCH_TEXT,
     SENTENCE_1,
-    SENTENCE_2,
     SUGGESTIONS_HTML,
     calls_of,
     default_responder,
@@ -35,71 +30,6 @@ from tests.culture_stub import (
 
 def api_error(code: int, status: str = "INTERNAL") -> errors.APIError:
     return errors.ClientError(code, {"error": {"code": code, "message": "x", "status": status}})
-
-
-# --- 出典の取り出しと番号の差し込み ----------------------------------------
-
-
-def test_insert_citations_places_markers_after_japanese_segments() -> None:
-    """AC-4: 日本語の本文でも、根拠の文の直後に番号が入る。"""
-    supports = [
-        types.GroundingSupport(segment=types.Segment(text=SENTENCE_1), grounding_chunk_indices=[0]),
-        types.GroundingSupport(
-            segment=types.Segment(text=SENTENCE_2), grounding_chunk_indices=[1, 0]
-        ),
-    ]
-
-    text = insert_citations(RESEARCH_TEXT, supports, {0: 1, 1: 2})
-
-    assert text == f"{SENTENCE_1}[1]{SENTENCE_2}[1][2]"
-
-
-def test_insert_citations_skips_unknown_segments_and_chunks() -> None:
-    supports = [
-        types.GroundingSupport(
-            segment=types.Segment(text="本文に無い文"), grounding_chunk_indices=[0]
-        ),
-        types.GroundingSupport(segment=types.Segment(text=SENTENCE_1), grounding_chunk_indices=[7]),
-        types.GroundingSupport(segment=None, grounding_chunk_indices=[0]),
-    ]
-
-    assert insert_citations(RESEARCH_TEXT, supports, {0: 1}) == RESEARCH_TEXT
-
-
-def test_extract_research_collects_sources_and_suggestions() -> None:
-    research = extract_research(research_response())
-
-    assert [(s.index, s.title, s.url, s.domain) for s in research.sources] == [
-        (1, "記事A", "https://example.com/a", "example.com"),
-        (2, "記事B", "https://example.org/b", "example.org"),
-    ]
-    assert research.text == f"{SENTENCE_1}[1]{SENTENCE_2}[1][2]"
-    assert research.search_suggestions_html == SUGGESTIONS_HTML
-    assert research.web_search_queries == ["YOASOBI ファッション", "YOASOBI 経歴"]
-
-
-def test_extract_research_numbers_only_web_chunks() -> None:
-    response = research_response()
-    metadata = response.candidates[0].grounding_metadata
-    metadata.grounding_chunks.insert(0, types.GroundingChunk(web=None))
-    metadata.grounding_supports[0].grounding_chunk_indices = [1]
-
-    research = extract_research(response)
-
-    assert [s.index for s in research.sources] == [1, 2]
-    assert research.text.startswith(f"{SENTENCE_1}[1]")
-
-
-def test_extract_research_without_grounding() -> None:
-    research = extract_research(research_response(grounded=False))
-
-    assert research.text == RESEARCH_TEXT
-    assert research.sources == []
-    assert research.search_suggestions_html == ""
-
-
-def test_valid_indices_drops_out_of_range_and_duplicates() -> None:
-    assert valid_indices([2, 2, 9, 0, 1], 2) == [1, 2]
 
 
 # --- プロンプト ------------------------------------------------------------
@@ -160,7 +90,8 @@ async def test_research_calls_gemini_three_times_with_expected_inputs() -> None:
     assert set(calls) == {"research", "structure", "outfit"}
     # 1. 調べる: Google 検索あり
     assert calls["research"]["config"].tools[0].google_search is not None
-    assert calls["research"]["config"].automatic_function_calling.disable is True
+    for name in ("research", "structure", "outfit"):
+        assert calls[name]["config"].automatic_function_calling.disable is True
     # 2. 整理する: 出典番号入りの本文を渡し、検索は使わない
     assert f"{SENTENCE_1}[1]" in calls["structure"]["contents"]
     assert not calls["structure"]["config"].tools

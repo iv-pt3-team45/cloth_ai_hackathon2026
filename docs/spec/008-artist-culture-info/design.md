@@ -40,7 +40,8 @@
 
 ```
 MvLookupScreen: 動画情報が表示された(URL 入力 / 候補の選択)
-  → 入力をロック(入力欄・検索ボタン・候補・「候補一覧に戻る」)、回転ローディングを表示
+  → 入力をロック(入力欄・検索ボタン・候補・「候補一覧に戻る」※)、回転ローディングを表示
+    ※ spec 009 で「候補一覧に戻る」は廃止し、候補の直下に展開する形に変更した
   → CultureRepository.research(video)
   → POST /api/v1/culture/research  {"video": VideoInfo}
   → culture.py(routes): CultureRequest で検証
@@ -172,6 +173,7 @@ API の契約(schemas)と Gemini への指示(フィールドの description)は
 
 - 取得の開始: `_lookup()` で `_video` が設定されたら(URL 入力・候補の選択のどちらでも)`_researchCulture(video)` を呼ぶ(AC-1)。
 - ロック: `_cultureLoading` の間は、入力欄(`enabled: false`)・検索ボタン・候補のタップ・「候補一覧に戻る」を無効にする(AC-2)。
+  spec 009 で「候補一覧に戻る」は廃止し、ロックの対象にライブの検索を加えた(`_busy` に `_liveLoading` を含める)。
   動画情報の取得中(`_loading`)と合わせて `_busy = _loading || _cultureLoading` で判定する。
 - 取得中に別タブ(チャット)へ移ることはできる。戻ったときは `IndexedStack` により状態が保たれている。
 
