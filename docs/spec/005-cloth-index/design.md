@@ -82,7 +82,7 @@ uv run python scripts/build_cloth_index.py [-i 画像ディレクトリ] [-o 出
 
 | 設定 | 既定値 | 用途 |
 | --- | --- | --- |
-| `cloth_index_model` | `gemini-2.5-flash` | 解析に使うモデル |
+| `cloth_index_model` | `gemini-3.5-flash-lite` | 解析に使うモデル |
 
 ## 5. エラーハンドリング / 非機能
 
