@@ -17,7 +17,7 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 | エージェント基盤 | Agent Development Kit (ADK) | `google-adk`。`LlmAgent` + `Runner` で Gemini を呼ぶ。ツール実行への拡張が前提 |
 | 外部 API | Gemini(Google Cloud Vertex AI) | ADK 経由で呼び出す。**認証は ADC**(鍵ファイルは使わない) |
 | 外部 API | YouTube Data API v3 | MV のメタ情報取得(4.8)。`httpx` で直接呼ぶ。**認証は API キー**(例外。3.4) |
-| 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
+| 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)・ライブ情報(4.10)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
 | メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4) |
 | 実行環境 | Docker Compose | フロント / バックを 1 コマンドで同時起動 |
 | 設定管理 | pydantic-settings / `.env` | 秘匿情報は Git 管理外 |
@@ -57,7 +57,7 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 │   app/schemas/        ── Pydantic モデル(API 契約)                  │
 │   app/core/           ── 設定(config) / ロギング                    │
 │   app/services/youtube.py ── YouTube Data API を httpx で直接呼ぶ   │
-│   app/services/culture.py ── Gemini を google-genai で直接呼ぶ      │
+│   app/services/culture.py, live.py ── Gemini を直接呼ぶ             │
 └──────────────────────────────────┼──────────────────────────────────┘
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -75,7 +75,7 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 │ Google Cloud                                                        │
 │   Vertex AI ── Gemini (モデルは GEMINI_MODEL で指定)                │
 │   Vertex AI ── Grounding with Google Search / YouTube の動画入力    │
-│              (カルチャー情報。services/culture.py から直接呼ぶ)     │
+│              (カルチャー・ライブ情報。culture.py / live.py から)    │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -137,12 +137,12 @@ tx_hackathon_gc/
 │   │   ├── main.py           # エントリポイント(create_app)
 │   │   ├── api/
 │   │   │   ├── router.py     # ルータ集約
-│   │   │   └── routes/       # health.py, chat.py, youtube.py, culture.py
+│   │   │   └── routes/       # health.py, chat.py, youtube.py, culture.py, live.py
 │   │   ├── core/             # config.py, logging.py
-│   │   ├── schemas/          # Pydantic モデル(chat.py, youtube.py, culture.py)
+│   │   ├── schemas/          # Pydantic モデル(chat.py, youtube.py, culture.py, live.py)
 │   │   ├── services/         # agent.py, agent_loop.py, verification.py, media.py,
 │   │   │                     #   cloth_index.py, wardrobe.py, youtube.py, mv_title.py,
-│   │   │                     #   culture.py ほか
+│   │   │                     #   culture.py, live.py, grounding.py ほか
 │   │   ├── created_images/   # 生成された画像の保存先(Git 管理外)
 │   │   └── created_videos/   # 生成された動画の保存先(Git 管理外)
 │   ├── scripts/
@@ -172,7 +172,8 @@ tx_hackathon_gc/
 │       ├── 005-cloth-index/
 │       ├── 006-wardrobe-tools/
 │       ├── 007-youtube-mv-metadata/
-│       └── 008-artist-culture-info/
+│       ├── 008-artist-culture-info/
+│       └── 009-live-info-search/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
 ```
@@ -233,6 +234,8 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `YOUTUBE_REQUEST_TIMEOUT` | `10.0` | YouTube API の待ち時間上限(秒) |
 | `CULTURE_MODEL` | `gemini-2.5-flash` | カルチャー情報(4.9)で使うモデル。Google 検索と YouTube の動画入力に対応したものを指定する |
 | `CULTURE_TIMEOUT` | `180.0` | カルチャー情報の取得全体の待ち時間上限(秒) |
+| `LIVE_SEARCH_MODEL` | `gemini-2.5-flash` | ライブ情報(4.10)の検索に使うモデル。Google 検索に対応したものを指定する |
+| `LIVE_SEARCH_TIMEOUT` | `120.0` | ライブ情報の検索全体の待ち時間上限(秒) |
 
 ### 3.3 Google Cloud 認証(ADC)
 
@@ -564,7 +567,8 @@ YouTube の **URL** か **MV 名**を入れると、**リンク・曲名・ア�
 
 - 画面: Web アプリ(http://localhost:8080)の下部ナビゲーション「**MV 検索**」
 - **URL を入れた場合**: その動画の情報がすぐ表示される。
-- **MV 名を入れた場合**: 検索結果が最大 5 件、候補として並ぶ。選ぶとその動画のリンクと情報が表示される。
+- **MV 名を入れた場合**: 検索結果が最大 5 件、候補として並ぶ。選ぶと**画面は切り替わらず、その候補の直下に**
+  リンクと情報が展開される(候補一覧は残る)。別の候補を選ぶと展開が移り、展開中の候補をもう一度押すと閉じる。
 
 API から直接呼ぶ場合(入力は URL でも MV 名でも同じエンドポイント):
 
@@ -628,7 +632,7 @@ Gemini がそのアーティストのカルチャー情報を調べ、動画情�
 | 出典 / 検索候補 | 参照したページと、Google の検索候補 | Google 検索 |
 
 - **調べている間(数十秒。`gemini-2.5-flash` で 3 分台の MV なら約 50 秒)は MV 検索画面の入力を受け付けない**
-  (入力欄・検索ボタン・候補・「候補一覧に戻る」)。
+  (入力欄・検索ボタン・候補の選択・ライブの検索)。
 - 1 回の取得で Gemini を 3 回呼ぶ。① Google 検索ありで調べる → ② 検索なしで項目ごとに整理する、
   と並行して ③ MV の映像(YouTube の URL をそのまま渡す)から衣装を読み取る。
 - **結果は保存しない**(Google 検索のグラウンディング結果の保存は利用規約上の問題になるおそれがあるため)。
@@ -652,6 +656,36 @@ curl -s -X POST http://localhost:8000/api/v1/culture/research \
 
 応答の形は [docs/spec/008-artist-culture-info/design.md](docs/spec/008-artist-culture-info/design.md) の 3. を参照。
 プロンプトを変えるときは [app/services/culture.py](backend/app/services/culture.py) を直す。
+
+### 4.10 ライブ情報(会場・日付・当日の天気)を調べる
+
+MV 検索ページの下部の「**ライブを探す**」に、**ライブ情報(ライブ名・ツアー名・会場など)か日付のどちらか**を入れて検索すると、
+Gemini が Google 検索で該当するライブを調べ、**最大 3 件**の候補を出す。
+
+| 候補ごとの項目 | 内容 |
+| --- | --- |
+| アーティスト名 | **表示中の動画でアーティストが分かっている場合は取得しない**(そのアーティストの公演だけを探す) |
+| ライブ名 / 場所 / 日付 | ツアー名・会場名と所在地・公演日(1 候補 = 1 公演日) |
+| 当日の天気 | 概況・最高 / 最低気温・降水確率(分かる範囲)と、**実績か予報か** |
+
+- 表示中のアーティストは、カルチャー情報(4.9)で特定した名前を優先し、無ければタイトルを分解できた場合の名前を使う。
+  動画を表示していないときは、Gemini が入力からアーティストを特定する。
+- 天気は、過去の公演なら実際の天気、先の公演なら予報。**予報が出るのはおよそ 2 週間先まで**で、それより先は「予報はまだありません」になる。
+  **天気は検索で確認できた値だけを出す**(Gemini には候補ごとに「公演日 + 所在地 + 天気」で検索させ、出典の無い天気は「不明」にする)。
+  サーバ側で、未来の日付の「実績」や 2 週間より先の値、実績の降水確率も取り除いている(推測で埋めないため)。
+- 候補をタップすると 1 件を選べる(強調表示される)。選択は画面上だけで、保存はしない(後続のコーデ提案で使う前提)。
+- 検索中(数十秒)は MV 検索ページの他の入力を受け付けない。カルチャー情報の取得中もライブの検索はできない。
+- 結果は保存しない。出典と Google の検索候補を必ず表示する(4.9 と同じ理由)。
+- 日付のカレンダーは英語表記になる(アプリに日本語のローカライズを入れていないため)。
+
+API から直接呼ぶ場合:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/live/search   -H "Content-Type: application/json"   -d '{"query": "電光石火", "date": "2023-06-04", "artist": "YOASOBI"}'
+```
+
+`query` と `date` はどちらか一方でよい(両方空なら 422)。`artist` は省略可。
+応答の形は [docs/spec/009-live-info-search/design.md](docs/spec/009-live-info-search/design.md) の 3. を参照。
 
 ---
 
@@ -759,7 +793,8 @@ docs/spec/001-user-authentication/
 | [005-cloth-index](docs/spec/005-cloth-index/) | 服画像から属性インデックスを作成 | done |
 | [006-wardrobe-tools](docs/spec/006-wardrobe-tools/) | 服インデックスをエージェントから参照(ツール) | done |
 | [007-youtube-mv-metadata](docs/spec/007-youtube-mv-metadata/) | YouTube の MV からメタ情報(アーティスト名・曲名など)を取得 | done |
-| [008-artist-culture-info](docs/spec/008-artist-culture-info/) | アーティストのカルチャー情報(ファッション・経歴・MV の衣装)を Gemini + Google 検索 + 映像解析で調べて整理 | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
+| [008-artist-culture-info](docs/spec/008-artist-culture-info/) | アーティストのカルチャー情報(ファッション・経歴・MV の衣装)を Gemini + Google 検索 + 映像解析で調べて整理 | done |
+| [009-live-info-search](docs/spec/009-live-info-search/) | ライブ情報(ライブ名・場所・日付・当日の天気)の検索と、MV 候補のその場での展開 | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
 
 ---
 
@@ -967,6 +1002,9 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | カルチャー情報が `… 秒以内に終わりませんでした`(504) | 映像の解析に時間がかかっている。`CULTURE_TIMEOUT` を延ばすか、時間をおいて再試行する |
 | カルチャー情報が `Gemini のクォータ(利用上限)を超えました`(503) | `CULTURE_MODEL` のクォータ超過。時間をおくか、別のモデルに変える |
 | カルチャー情報が `Web での調査に失敗しました`(502) | `CULTURE_MODEL` が Google 検索(グラウンディング)に対応していない可能性がある。対応モデル(`gemini-2.5-flash` など)を指定する |
+| ライブ情報が `… 秒以内に終わりませんでした`(504)/ `Gemini のクォータ…`(503) | カルチャー情報(4.9)と同じ。`LIVE_SEARCH_TIMEOUT` を延ばす、時間をおく、`LIVE_SEARCH_MODEL` を変える |
+| ライブの天気が「予報はまだありません」になる | 公演日が 2 週間より先。予報が出るまでは取得できない(サーバ側で根拠の無い値を取り除いている) |
+| ライブの天気が「不明」になる | Gemini が天気を検索で確認できなかった(出典の無い天気は推測の可能性があるため出さない)。時間をおいて再検索する |
 | 「この MV の衣装」だけが `映像を解析できませんでした` | 非公開・限定公開・年齢制限のある動画は解析できない。公開動画でも出る場合は、`CULTURE_MODEL` が YouTube の動画入力に対応しているか確認する(Vertex AI ではプレビュー機能) |
 | 検索候補が文字(検索クエリ)で表示される | Web 以外で実行している。検索候補の HTML は Web でのみ描画する(4.9) |
 | MV 検索でサムネイルが出ずアイコンになる | 画像の読み込みに失敗している。Flutter Web で CORS に引っかかる場合は `<img>` 表示に切り替える設定済み(`WebHtmlElementStrategy.fallback`)。ブラウザの開発者ツールでネットワークエラーを確認する |
