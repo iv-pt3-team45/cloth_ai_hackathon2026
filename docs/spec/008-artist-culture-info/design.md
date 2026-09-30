@@ -106,7 +106,7 @@ MvLookupScreen: 動画情報が表示された(URL 入力 / 候補の選択)
   "sources": [ { "index": 1, "title": "…", "url": "https://…", "domain": "…" } ],
   "search_suggestions_html": "<style>…</style><div class=\"container\">…</div>",
   "web_search_queries": ["YOASOBI ファッション", "…"],
-  "model": "gemini-2.5-flash"
+  "model": "gemini-3.5-flash-lite"
 }
 ```
 
@@ -254,7 +254,7 @@ CultureError(RuntimeError)       → 502
 
 | 設定 | 既定値 | 用途 |
 | --- | --- | --- |
-| `culture_model` | `gemini-2.5-flash` | ①②③ で使うモデル。Google 検索と YouTube の動画入力に対応したものを指定する |
+| `culture_model` | `gemini-3.5-flash-lite` | ①②③ で使うモデル。Google 検索と YouTube の動画入力に対応したものを指定する |
 | `culture_timeout` | `180` | ①〜③ 全体の待ち時間の上限(秒)。映像の解析を含むため長めにとる |
 
 未決事項 2(モデル)は「`GEMINI_MODEL` とは別に `CULTURE_MODEL` を設ける」に決定する。チャット用のモデル(軽量モデルなど)が検索や動画入力に対応していない場合でも、この機能だけ別のモデルにできるため。

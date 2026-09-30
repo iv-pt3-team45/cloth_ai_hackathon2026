@@ -62,7 +62,7 @@ Flutter(画面) --> ApiClient --> FastAPI(router) --> Service --> Gemini(Vertex 
 
 ## 7. Gemini プロンプト設計
 
-- モデル: `gemini-2.5-flash`
+- モデル: `gemini-3.5-flash-lite`(テキスト系の標準。変える場合は理由を書く)
 - system instruction / 入力の組み立て / 出力フォーマット(JSON スキーマ等)
 - 失敗時のフォールバック
 

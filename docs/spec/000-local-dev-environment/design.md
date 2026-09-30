@@ -34,7 +34,7 @@ Flutter Web (localhost:8080)
 
 ### `POST /api/v1/chat`
 リクエスト: `{"message":"...","history":[{"role":"user","content":"..."}]}`
-レスポンス: `{"reply":"...","model":"gemini-2.5-flash"}`
+レスポンス: `{"reply":"...","model":"gemini-3.5-flash-lite"}`
 
 | ステータス | 条件 |
 | --- | --- |
@@ -65,7 +65,7 @@ Flutter Web (localhost:8080)
 
 > 呼び出し方は spec 001(Agent ADK)で置き換えられている。以下は当初設計。
 
-- モデル: `gemini-2.5-flash`(`GEMINI_MODEL` で変更可)
+- モデル: `gemini-2.5-flash`(`GEMINI_MODEL` で変更可)→ 現在の既定は `gemini-3.5-flash-lite`
 - `system_instruction` は設定値。履歴は `types.Content` のリストに変換して渡す。
 - 空応答は `GeminiError` として 502 を返す。
 

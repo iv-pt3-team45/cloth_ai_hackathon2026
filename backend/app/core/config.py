@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     agent_name: str = "chat_agent"
     agent_description: str = "ユーザーとの対話を担当するエージェント"
 
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_temperature: float = 0.7
     gemini_max_output_tokens: int = 2048
     # --- メディア生成 ---
@@ -55,12 +55,12 @@ class Settings(BaseSettings):
     media_generation_timeout: int = 300
 
     # --- エージェントループ ---
-    # 検証用モデル。生成モデルとクォータを分けられるよう既定を別にしている
-    verifier_model: str = "gemini-2.5-flash"
+    # 検証用モデル。生成モデルとクォータを分けたいときは別のモデルを指定する
+    verifier_model: str = "gemini-3.5-flash-lite"
     loop_max_iterations: int = 3
 
     # --- 服インデックス ---
-    cloth_index_model: str = "gemini-2.5-flash"
+    cloth_index_model: str = "gemini-3.5-flash-lite"
     # エージェントが参照する服インデックス(backend/ からの相対パス)
     cloth_index_path: str = "tests/sample_cloth_indexs/index.json"
 
@@ -75,13 +75,13 @@ class Settings(BaseSettings):
 
     # --- アーティストのカルチャー情報(spec 008) ---
     # Google 検索(グラウンディング)と YouTube の動画入力に対応したモデルを指定する
-    culture_model: str = "gemini-2.5-flash"
+    culture_model: str = "gemini-3.5-flash-lite"
     # 調査・整理・MV の映像の解析を合わせた待ち時間の上限(秒)
     culture_timeout: float = 180.0
 
     # --- ライブ情報の検索(spec 009) ---
     # Google 検索(グラウンディング)に対応したモデルを指定する
-    live_search_model: str = "gemini-2.5-flash"
+    live_search_model: str = "gemini-3.5-flash-lite"
     # 調査・整理を合わせた待ち時間の上限(秒)
     live_search_timeout: float = 120.0
 

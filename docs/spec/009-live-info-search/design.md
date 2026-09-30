@@ -79,7 +79,7 @@ MvLookupScreen
   "sources": [ { "index": 1, "title": "…", "url": "https://…", "domain": "…" } ],
   "search_suggestions_html": "…",
   "web_search_queries": ["…"],
-  "model": "gemini-2.5-flash"
+  "model": "gemini-3.5-flash-lite"
 }
 ```
 
@@ -222,7 +222,7 @@ MV の結果の下に「ライブを探す」カードを置く(MV を調べる 
 
 | 設定 | 既定値 | 用途 |
 | --- | --- | --- |
-| `live_search_model` | `gemini-2.5-flash` | ライブ情報の検索に使うモデル(Google 検索に対応したもの) |
+| `live_search_model` | `gemini-3.5-flash-lite` | ライブ情報の検索に使うモデル(Google 検索に対応したもの) |
 | `live_search_timeout` | `120` | ①② 全体の待ち時間の上限(秒) |
 
 ### 6.6 実 API での確認で見つかった点(2026-09-29)

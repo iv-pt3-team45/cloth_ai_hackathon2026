@@ -75,7 +75,7 @@ uv run python scripts/run_agent_loop.py -m "<要望>" [-n 3] [-f 参考画像] [
 
 | 設定 | 既定値 | 用途 |
 | --- | --- | --- |
-| `verifier_model` | `gemini-2.5-flash` | 検証用モデル。生成モデルとクォータを分けるため既定を別にする |
+| `verifier_model` | `gemini-3.5-flash-lite` | 検証用モデル。既定は生成モデルと同じ。クォータを分けたいときは別のモデルを指定する |
 | `loop_max_iterations` | `3` | 既定の上限回数(CLI の `-n` で上書き) |
 
 ## 5. エラーハンドリング / 非機能

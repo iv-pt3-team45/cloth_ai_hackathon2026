@@ -15,7 +15,7 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 | バックエンド | Python 3.12 / FastAPI | `app/` 配下にレイヤ分割(api / services / schemas / core) |
 | パッケージ管理 | uv | `backend/pyproject.toml` + `backend/uv.lock` で固定 |
 | エージェント基盤 | Agent Development Kit (ADK) | `google-adk`。`LlmAgent` + `Runner` で Gemini を呼ぶ。ツール実行への拡張が前提 |
-| 外部 API | Gemini(Google Cloud Vertex AI) | ADK 経由で呼び出す。**認証は ADC**(鍵ファイルは使わない) |
+| 外部 API | Gemini(Google Cloud Vertex AI) | ADK 経由で呼び出す。**認証は ADC**(鍵ファイルは使わない)。テキスト系のモデルは**基本 `gemini-3.5-flash-lite`**(3.2) |
 | 外部 API | YouTube Data API v3 | MV のメタ情報取得(4.8)。`httpx` で直接呼ぶ。**認証は API キー**(例外。3.4) |
 | 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)・ライブ情報(4.10)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
 | メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4) |
@@ -218,23 +218,23 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `AGENT_NAME` | `chat_agent` | エージェント名。ADK の Event の author になる |
 | `AGENT_DESCRIPTION` | (説明文) | エージェントの役割。マルチエージェント化時の選択材料になる |
 | `GEMINI_SYSTEM_INSTRUCTION` | (指示文) | エージェントの役割・口調。`LlmAgent` の instruction になる |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | 使用モデル。利用可能な名前は 9. の方法で確認できる |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | 使用モデル。利用可能な名前は 10. の方法で確認できる |
 | `GEMINI_TEMPERATURE` / `GEMINI_MAX_OUTPUT_TOKENS` | `0.7` / `2048` | 生成パラメータ |
 | `IMAGE_MODEL` | `gemini-3.1-flash-lite-image` | 画像生成モデル |
 | `VIDEO_MODEL` | `gemini-omni-1.1-flash-preview` | 動画生成モデル(Interactions API 経由) |
 | `CREATED_IMAGES_DIR` / `CREATED_VIDEOS_DIR` | `app/created_images` / `app/created_videos` | 生成物の保存先(backend/ からの相対) |
 | `MEDIA_GENERATION_TIMEOUT` | `300` | 動画生成の待ち時間上限(秒) |
-| `VERIFIER_MODEL` | `gemini-2.5-flash` | ループの検証に使うモデル(生成モデルとクォータを分ける) |
+| `VERIFIER_MODEL` | `gemini-3.5-flash-lite` | ループの検証に使うモデル(生成モデルとクォータを分けたいときは別のモデルにする) |
 | `LOOP_MAX_ITERATIONS` | `3` | 生成 → 検証 を繰り返す上限回数 |
-| `CLOTH_INDEX_MODEL` | `gemini-2.5-flash` | 服画像から属性を抽出するモデル |
+| `CLOTH_INDEX_MODEL` | `gemini-3.5-flash-lite` | 服画像から属性を抽出するモデル |
 | `CLOTH_INDEX_PATH` | `tests/sample_cloth_indexs/index.json` | エージェントが参照する服インデックス |
 | `YOUTUBE_DATA_API_KEY` | 空 | YouTube Data API v3 の API キー(**秘匿情報**。3.4) |
 | `YOUTUBE_SEARCH_MAX_RESULTS` | `5` | MV 名で検索したときの候補数 |
 | `YOUTUBE_REGION_CODE` | `JP` | 検索結果の地域。空なら指定しない |
 | `YOUTUBE_REQUEST_TIMEOUT` | `10.0` | YouTube API の待ち時間上限(秒) |
-| `CULTURE_MODEL` | `gemini-2.5-flash` | カルチャー情報(4.9)で使うモデル。Google 検索と YouTube の動画入力に対応したものを指定する |
+| `CULTURE_MODEL` | `gemini-3.5-flash-lite` | カルチャー情報(4.9)で使うモデル。Google 検索と YouTube の動画入力に対応したものを指定する |
 | `CULTURE_TIMEOUT` | `180.0` | カルチャー情報の取得全体の待ち時間上限(秒) |
-| `LIVE_SEARCH_MODEL` | `gemini-2.5-flash` | ライブ情報(4.10)の検索に使うモデル。Google 検索に対応したものを指定する |
+| `LIVE_SEARCH_MODEL` | `gemini-3.5-flash-lite` | ライブ情報(4.10)の検索に使うモデル。Google 検索に対応したものを指定する |
 | `LIVE_SEARCH_TIMEOUT` | `120.0` | ライブ情報の検索全体の待ち時間上限(秒) |
 
 ### 3.3 Google Cloud 認証(ADC)
@@ -462,7 +462,8 @@ uv run python scripts/run_agent_loop.py -m "この写真に似た雰囲気で作
 - 各周回の「生成 / 生成物 / 判定 / 改善点」が画面に出る。
 - **終了コード**: 要望を満たしたら `0`、上限まで未達なら `1`(スクリプトから使える)。
 - 1 周につきモデル呼び出しは 2 回(生成 + 検証)。上限を上げるとクォータを消費する。
-- 検証モデルは `VERIFIER_MODEL` で別に指定できる(既定 `gemini-2.5-flash`)。生成モデルのクォータ枯渇と切り離すため。
+- 検証モデルは `VERIFIER_MODEL` で別に指定できる(既定は生成と同じ `gemini-3.5-flash-lite`)。
+  生成モデルのクォータ枯渇と切り離したいときは別のモデルを指定する。
 
 実行例(1 周目で画像生成がクォータ超過 → 検証が未達と判定 → 2 周目で成功):
 
@@ -504,7 +505,7 @@ uv run python scripts/build_cloth_index.py --force
 ```json
 {
   "generated_at": "2026-09-17T15:43:10+09:00",
-  "model": "gemini-2.5-flash",
+  "model": "gemini-3.5-flash-lite",
   "source_dir": "tests/sample_images",
   "count": 5,
   "entries": [
@@ -522,7 +523,7 @@ uv run python scripts/build_cloth_index.py --force
         }
       ],
       "summary": "床に広げられたピンクの半袖Tシャツ。",
-      "model": "gemini-2.5-flash",
+      "model": "gemini-3.5-flash-lite",
       "analyzed_at": "2026-09-17T15:42:54+09:00"
     }
   ]
@@ -631,7 +632,7 @@ Gemini がそのアーティストのカルチャー情報を調べ、動画情�
 | 経歴・音楽性 | 概要・活動の歩み・ジャンル・代表曲・音楽的な特徴 | Google 検索 |
 | 出典 / 検索候補 | 参照したページと、Google の検索候補 | Google 検索 |
 
-- **調べている間(数十秒。`gemini-2.5-flash` で 3 分台の MV なら約 50 秒)は MV 検索画面の入力を受け付けない**
+- **調べている間(数十秒。実測は `gemini-2.5-flash` で 3 分台の MV なら約 50 秒)は MV 検索画面の入力を受け付けない**
   (入力欄・検索ボタン・候補の選択・ライブの検索)。
 - 1 回の取得で Gemini を 3 回呼ぶ。① Google 検索ありで調べる → ② 検索なしで項目ごとに整理する、
   と並行して ③ MV の映像(YouTube の URL をそのまま渡す)から衣装を読み取る。
