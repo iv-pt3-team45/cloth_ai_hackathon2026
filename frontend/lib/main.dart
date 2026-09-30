@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'features/chat/chat_screen.dart';
 import 'features/mv_lookup/mv_lookup_screen.dart';
+import 'features/wardrobe/wardrobe_screen.dart';
 
 void main() {
   runApp(const App());
@@ -41,7 +42,7 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: const [MvLookupScreen(), ChatScreen()],
+        children: const [MvLookupScreen(), WardrobeScreen(), ChatScreen()],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -51,6 +52,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.music_video_outlined),
             selectedIcon: Icon(Icons.music_video),
             label: 'MV 検索',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.checkroom_outlined),
+            selectedIcon: Icon(Icons.checkroom),
+            label: '手持ちの服',
           ),
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),

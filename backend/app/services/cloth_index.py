@@ -1,20 +1,25 @@
-"""服の画像から属性(素材・形・色・系統)を抽出してインデックス化する。
+"""服の画像から属性(素材・形・色・系統・季節・暖かさ・使う場面)を抽出してインデックス化する。
 
 画像 1 枚ごとにモデルへ問い合わせ、構造化出力で属性を受け取る。
-結果は 1 つの `index.json` にまとめて保存する。
+結果は 1 つの `index.json` にまとめて保存する(spec 005)。
+アプリからの登録(spec 010)も、画像データを渡して同じ解析を使う(`analyze_cloth_bytes`)。
 """
 
 import json
 import logging
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import get_args
 
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings, get_settings
+from app.schemas.wardrobe import Occasion, Season, Warmth
+from app.services.grounding import NO_AFC
 from app.services.media import get_media_client
 
 logger = logging.getLogger(__name__)
@@ -40,8 +45,17 @@ _INSTRUCTION = """\
 - colors は目立つ順に並べること。
 - style(系統)は「カジュアル」「ストリート」「きれいめ」のように一般的な呼び方で書くこと。
 - notes にはプリントの文言や装飾など、検索の手がかりになる特徴を書くこと。
+- seasons は「春」「夏」「秋」「冬」から、着るのに向いている季節をすべて選ぶこと。
+- warmth は「薄手」「普通」「厚手」から 1 つ選ぶこと。
+- occasions は「普段着」「きれいめ(食事・オフィス)」「フォーマル」「スポーツ・アウトドア」
+  「ライブ・フェス」から、向いている場面をすべて選ぶこと。
 - 衣類が写っていない場合は items を空にし、summary にその旨を書くこと。
 """
+
+# 季節・暖かさ・使う場面の選択肢(正は app/schemas/wardrobe.py)
+SEASONS: tuple[str, ...] = get_args(Season)
+WARMTHS: tuple[str, ...] = get_args(Warmth)
+OCCASIONS: tuple[str, ...] = get_args(Occasion)
 
 
 class ClothIndexError(RuntimeError):
@@ -58,6 +72,19 @@ class ClothItem(BaseModel):
     pattern: str = Field(default="", description="柄(無地、プリント、ストライプなど)")
     style: str = Field(default="", description="系統(カジュアル、ストリートなど)")
     notes: str = Field(default="", description="プリントの文言や装飾などの特徴")
+    # 以下は spec 010 で追加。既存の index.json(項目が無い)も既定値で読める。
+    # 想定外の値で応答全体の解釈が失敗しないよう文字列で受け、normalize_item() で選択肢に整える
+    seasons: list[str] = Field(
+        default_factory=list, description="着るのに向いている季節(春 / 夏 / 秋 / 冬 から複数)"
+    )
+    warmth: str = Field(default="", description="暖かさ(薄手 / 普通 / 厚手 から 1 つ)")
+    occasions: list[str] = Field(
+        default_factory=list,
+        description=(
+            "使う場面(普段着 / きれいめ(食事・オフィス)/ フォーマル / "
+            "スポーツ・アウトドア / ライブ・フェス から複数)"
+        ),
+    )
 
 
 class ClothAnalysis(BaseModel):
@@ -96,25 +123,57 @@ def index_path(output_dir: Path) -> Path:
     return output_dir / INDEX_FILE_NAME
 
 
-def analyze_cloth_image(
-    image: Path,
+def _pick(value: str, choices: Sequence[str]) -> str | None:
+    """選択肢に当てはまる値を返す。
+
+    「きれいめ(食事・オフィス)」のような説明つきの値は、括弧の前の語で照合する。
+    """
+    text = value.strip()
+    if text in choices:
+        return text
+    head = re.split(r"[(（]", text, maxsplit=1)[0].strip()
+    return head if head in choices else None
+
+
+def _pick_many(values: Sequence[str], choices: Sequence[str]) -> list[str]:
+    """選択肢に当てはまる値だけを、選択肢の並び順で重複なく返す。"""
+    picked = {p for value in values if (p := _pick(value, choices))}
+    return [choice for choice in choices if choice in picked]
+
+
+def normalize_item(item: ClothItem) -> ClothItem:
+    """季節・暖かさ・使う場面を選択肢に整える(選択肢の外の値は捨てる)。"""
+    return item.model_copy(
+        update={
+            "seasons": _pick_many(item.seasons, SEASONS),
+            "warmth": _pick(item.warmth, WARMTHS) or "",
+            "occasions": _pick_many(item.occasions, OCCASIONS),
+        }
+    )
+
+
+def analyze_cloth_bytes(
+    data: bytes,
+    mime_type: str,
     settings: Settings | None = None,
     client: genai.Client | None = None,
-) -> ClothIndexEntry:
-    """画像 1 枚を解析して属性を返す。"""
-    settings = settings or get_settings()
-    client = client or get_media_client()
+) -> ClothAnalysis:
+    """画像データ 1 枚を解析して、服ごとの属性を返す(選択肢の項目は整えたもの)。
 
+    Raises:
+        ClothIndexError: モデルの呼び出しに失敗した / 応答を解釈できない場合。
+            元の例外は `__cause__` に残す(呼び出し側がクォータ超過などを判定できるように)。
+    """
+    settings = settings or get_settings()
     try:
+        client = client or get_media_client()
         response = client.models.generate_content(
             model=settings.cloth_index_model,
             contents=[
                 types.Content(
                     role="user",
                     parts=[
-                        types.Part.from_bytes(
-                            data=image.read_bytes(), mime_type=guess_mime_type(image)
-                        ),
+                        types.Part.from_bytes(data=data, mime_type=mime_type),
                         types.Part.from_text(text="この画像の衣類の属性を記録してください。"),
                     ],
                 )
@@ -123,14 +182,31 @@ def analyze_cloth_image(
                 system_instruction=_INSTRUCTION,
                 response_mime_type="application/json",
                 response_schema=ClothAnalysis,
+                automatic_function_calling=NO_AFC,
             ),
         )
     except Exception as exc:
-        raise ClothIndexError(f"{image.name} の解析に失敗しました: {exc}") from exc
+        raise ClothIndexError(f"解析に失敗しました: {exc}") from exc
 
     analysis = response.parsed
     if not isinstance(analysis, ClothAnalysis):
-        raise ClothIndexError(f"{image.name} の応答を解釈できませんでした。")
+        raise ClothIndexError("応答を解釈できませんでした。")
+    return analysis.model_copy(update={"items": [normalize_item(i) for i in analysis.items]})
+
+
+def analyze_cloth_image(
+    image: Path,
+    settings: Settings | None = None,
+    client: genai.Client | None = None,
+) -> ClothIndexEntry:
+    """画像ファイル 1 枚を解析して属性を返す(spec 005 の CLI 用)。"""
+    settings = settings or get_settings()
+    try:
+        analysis = analyze_cloth_bytes(
+            image.read_bytes(), guess_mime_type(image), settings=settings, client=client
+        )
+    except ClothIndexError as exc:
+        raise ClothIndexError(f"{image.name}: {exc}") from exc
 
     return ClothIndexEntry(
         image=image.name,

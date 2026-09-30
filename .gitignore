@@ -20,6 +20,9 @@ frontend/android/local.properties
 backend/app/created_images/
 backend/app/created_videos/
 
+# --- 登録した手持ちの服(写真とインデックス。spec 010) ---
+backend/data/
+
 # --- 認証情報 / シークレット ---
 infra/secrets/*
 !infra/secrets/.gitkeep

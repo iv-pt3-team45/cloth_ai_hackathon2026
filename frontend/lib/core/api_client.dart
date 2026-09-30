@@ -57,6 +57,11 @@ class ApiClient {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> delete(String path) async {
+    final response = await _client.delete(AppConfig.endpoint(path));
+    return _decode(response);
+  }
+
   Map<String, dynamic> _decode(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
@@ -64,6 +69,8 @@ class ApiClient {
         statusCode: response.statusCode,
       );
     }
+    // 204(削除など)は本文が空
+    if (response.bodyBytes.isEmpty) return const {};
     return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
   }
 

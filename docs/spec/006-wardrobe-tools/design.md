@@ -61,7 +61,7 @@ CLI の `--index` による差し替えがツールに反映されないため�
 
 | 設定 | 既定値 | 用途 |
 | --- | --- | --- |
-| `cloth_index_path` | `tests/sample_cloth_indexs/index.json` | 参照するインデックス(backend/ からの相対) |
+| `cloth_index_path` | ~~`tests/sample_cloth_indexs/index.json`~~ → **`data/wardrobe/index.json`**(spec 010 で変更。アプリで登録した服) | 参照するインデックス(backend/ からの相対) |
 
 ## 5. エラーハンドリング / 非機能
 

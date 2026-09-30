@@ -59,10 +59,14 @@ class Settings(BaseSettings):
     verifier_model: str = "gemini-3.5-flash-lite"
     loop_max_iterations: int = 3
 
-    # --- 服インデックス ---
+    # --- 服インデックス / 手持ちの服の登録(spec 005 / 006 / 010) ---
     cloth_index_model: str = "gemini-3.5-flash-lite"
-    # エージェントが参照する服インデックス(backend/ からの相対パス)
-    cloth_index_path: str = "tests/sample_cloth_indexs/index.json"
+    # 登録した服のインデックス(backend/ からの相対パス)。エージェントもここを参照する。
+    # 写真は同じフォルダの images/ に保存する。サンプルを参照したいときは
+    # tests/sample_cloth_indexs/index.json を指定する(CLI なら --index)
+    cloth_index_path: str = "data/wardrobe/index.json"
+    # 登録する写真 1 枚の上限(バイト)
+    wardrobe_max_image_bytes: int = 10 * 1024 * 1024
 
     # --- YouTube Data API ---
     # 【例外】API キーを使う。YouTube Data API は ADC の既定スコープ(cloud-platform)では呼べないため
