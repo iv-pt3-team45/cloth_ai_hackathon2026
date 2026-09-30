@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # エージェントが参照する服インデックス(backend/ からの相対パス)
     cloth_index_path: str = "tests/sample_cloth_indexs/index.json"
 
+    # --- 会場情報取得(F14) ---
+    venue_info_model: str = "gemini-2.5-flash"
+
     gemini_system_instruction: str = "あなたは日本語で簡潔かつ正確に回答するアシスタントです。"
 
     @property
