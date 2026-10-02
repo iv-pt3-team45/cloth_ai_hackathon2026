@@ -89,6 +89,8 @@ class Settings(BaseSettings):
     # 調査・整理を合わせた待ち時間の上限(秒)
     live_search_timeout: float = 120.0
 
+    # --- 会場情報取得(F14) ---
+    venue_info_model: str = "gemini-2.5-flash"
     # --- 手持ちの服からのコーデ提案(spec 011) ---
     # 提案(文字)に使うモデル。画像の生成は IMAGE_MODEL を使う
     outfit_model: str = "gemini-3.5-flash-lite"
