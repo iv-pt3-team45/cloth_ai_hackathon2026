@@ -74,6 +74,18 @@ class LiveCandidate {
   final LiveWeather weather;
   final List<int> sourceIndices;
 
+  /// バックエンドの LiveCandidate の形(コーデ提案に送り返す。spec 011)。
+  Map<String, dynamic> toJson() => {
+    'index': index,
+    'artist': artist,
+    'live_name': liveName,
+    'venue': venue,
+    'location': location,
+    'date': date == null ? null : isoDate(date!),
+    'weather': weather.toJson(),
+    'source_indices': sourceIndices,
+  };
+
   factory LiveCandidate.fromJson(Map<String, dynamic> json) {
     final date = json['date'];
     return LiveCandidate(
@@ -123,6 +135,14 @@ class LiveWeather {
   static String _degrees(double value) => value == value.roundToDouble()
       ? value.toStringAsFixed(0)
       : value.toStringAsFixed(1);
+
+  Map<String, dynamic> toJson() => {
+    'kind': kind,
+    'summary': summary,
+    'high_c': highC,
+    'low_c': lowC,
+    'precipitation_chance': precipitationChance,
+  };
 
   factory LiveWeather.fromJson(Map<String, dynamic> json) => LiveWeather(
     kind: json['kind'] as String? ?? 'unknown',

@@ -38,7 +38,8 @@ void main() {
     final labels = tester
         .widgetList<NavigationDestination>(find.byType(NavigationDestination))
         .map((d) => d.label);
-    expect(labels, ['MV 検索', '手持ちの服', 'チャット']);
+    // spec 011 で「確認」タブが加わった
+    expect(labels, ['MV 検索', '手持ちの服', '確認', 'チャット']);
     expect(find.text('写真を追加'), findsNothing);
 
     await tester.tap(find.text('手持ちの服'));
