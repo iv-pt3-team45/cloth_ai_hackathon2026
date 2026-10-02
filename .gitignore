@@ -16,6 +16,9 @@ frontend/ios/Pods/
 frontend/android/.gradle/
 frontend/android/local.properties
 
+# --- 動作確認スクリーンショット ---
+docs/screenshot/
+
 # --- エージェントの生成物(画像・動画) ---
 backend/app/created_images/
 backend/app/created_videos/
