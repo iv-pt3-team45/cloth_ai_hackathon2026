@@ -120,14 +120,13 @@ def _extract_address(
     (design.md の技術リスク参照。1回目の検索呼び出しとは別の、tools無しの呼び出し)。
     失敗しても例外を投げず、空文字を返す(住所が取れなくても致命的にしない)。
     """
-    settings = settings or get_settings()
-    client = client or get_media_client()
-
     prompt = (
         "次の説明文から、会場の住所だけを抽出してください。"
         f"読み取れない場合は空文字にしてください。\n\n{raw_text}"
     )
     try:
+        settings = settings or get_settings()
+        client = client or get_media_client()
         response = client.models.generate_content(
             model=settings.venue_info_model,
             contents=prompt,
