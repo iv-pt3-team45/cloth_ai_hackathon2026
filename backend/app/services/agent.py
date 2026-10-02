@@ -54,7 +54,12 @@ def build_agent(settings: Settings) -> LlmAgent:
         description=settings.agent_description,
         instruction=f"{settings.gemini_system_instruction}\n\n{TOOL_GUIDELINE}",
         # モデルが必要と判断したときに自分で呼ぶ(生成 / 手持ちの服の参照)
-        tools=[generate_image, generate_video, *build_wardrobe_tools(settings), *build_venue_tools(settings)],
+        tools=[
+            generate_image,
+            generate_video,
+            *build_wardrobe_tools(settings),
+            *build_venue_tools(settings),
+        ],
         generate_content_config=types.GenerateContentConfig(
             temperature=settings.gemini_temperature,
             max_output_tokens=settings.gemini_max_output_tokens,

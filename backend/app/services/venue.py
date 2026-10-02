@@ -7,9 +7,9 @@
 """
 
 import logging
-from enum import Enum
-from typing import Any, Literal
 from collections.abc import Callable
+from enum import StrEnum
+from typing import Any, Literal
 
 from google import genai
 from google.genai import types
@@ -25,7 +25,7 @@ class VenueSearchError(RuntimeError):
     """会場情報の検索(Gemini呼び出し)に失敗したときの例外。"""
 
 
-class VenueFormat(str, Enum):
+class VenueFormat(StrEnum):
     """会場の座席形態。粒度は design.md の決定に合わせ3値とする。"""
 
     STANDING = "standing"
@@ -38,7 +38,9 @@ class VenueInfo(BaseModel):
 
     venue_name: str
     format: VenueFormat = VenueFormat.UNKNOWN
-    address: str = Field(default="", description="会場の住所(取得できない場合は空文字。F15が利用する)")
+    address: str = Field(
+        default="", description="会場の住所(取得できない場合は空文字。F15が利用する)"
+    )
     summary: str = Field(default="", description="グラウンディングで得られた説明文(短縮)")
     status: Literal["ok", "error"] = "ok"
     message: str = Field(default="", description="status=error のときの理由")
@@ -121,7 +123,10 @@ def _extract_address(
     settings = settings or get_settings()
     client = client or get_media_client()
 
-    prompt = f"次の説明文から、会場の住所だけを抽出してください。読み取れない場合は空文字にしてください。\n\n{raw_text}"
+    prompt = (
+        "次の説明文から、会場の住所だけを抽出してください。"
+        f"読み取れない場合は空文字にしてください。\n\n{raw_text}"
+    )
     try:
         response = client.models.generate_content(
             model=settings.venue_info_model,
@@ -136,7 +141,9 @@ def _extract_address(
             return parsed.address
         return ""
     except Exception:
-        logger.warning("住所の抽出に失敗しました(致命的ではないため空文字で継続します)", exc_info=True)
+        logger.warning(
+            "住所の抽出に失敗しました(致命的ではないため空文字で継続します)", exc_info=True
+        )
         return ""
 
 

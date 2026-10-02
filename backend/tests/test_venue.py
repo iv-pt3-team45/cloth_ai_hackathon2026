@@ -17,8 +17,7 @@ def test_classify_format_unknown_when_no_keyword() -> None:
 
 def test_classify_format_unknown_when_mixed() -> None:
     assert (
-        _classify_format("1階はスタンディング、2階は全席指定のホールです。")
-        == VenueFormat.UNKNOWN
+        _classify_format("1階はスタンディング、2階は全席指定のホールです。") == VenueFormat.UNKNOWN
     )
 
 
@@ -26,7 +25,9 @@ def test_get_venue_info_ok(monkeypatch) -> None:
     from app.services import venue
 
     monkeypatch.setattr(
-        venue, "_search_venue", lambda venue_name, settings=None, client=None: "全席指定のホールです。"
+        venue,
+        "_search_venue",
+        lambda venue_name, settings=None, client=None: "全席指定のホールです。",
     )
     result = venue.get_venue_info("テスト会場")
     assert result.status == "ok"
@@ -57,7 +58,9 @@ def test_extract_address_ok() -> None:
     mock_client = MagicMock()
     mock_client.models.generate_content.return_value = mock_response
 
-    address = venue._extract_address("日本武道館は東京都千代田区北の丸公園2-3にあります。", client=mock_client)
+    address = venue._extract_address(
+        "日本武道館は東京都千代田区北の丸公園2-3にあります。", client=mock_client
+    )
     assert address == "東京都千代田区北の丸公園2-3"
 
 
@@ -77,7 +80,9 @@ def test_get_venue_info_includes_address(monkeypatch) -> None:
     from app.services import venue
 
     monkeypatch.setattr(
-        venue, "_search_venue", lambda venue_name, settings=None, client=None: "全席指定のホールです。"
+        venue,
+        "_search_venue",
+        lambda venue_name, settings=None, client=None: "全席指定のホールです。",
     )
     monkeypatch.setattr(
         venue,
