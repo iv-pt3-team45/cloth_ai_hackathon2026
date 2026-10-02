@@ -18,9 +18,10 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 | 外部 API | Gemini(Google Cloud Vertex AI) | ADK 経由で呼び出す。**認証は ADC**(鍵ファイルは使わない)。テキスト系のモデルは**基本 `gemini-3.5-flash-lite`**(3.2) |
 | 外部 API | YouTube Data API v3 | MV のメタ情報取得(4.8)。`httpx` で直接呼ぶ。**認証は API キー**(例外。3.4) |
 | 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)・ライブ情報(4.10)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
-| メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4) |
+| メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4)。画像はコーデ提案でマネキンに服を着せるのにも使う(4.12) |
 | 実行環境 | Docker Compose | フロント / バックを 1 コマンドで同時起動 |
 | 設定管理 | pydantic-settings / `.env` | 秘匿情報は Git 管理外 |
+| 写真の選択(フロント) | `image_picker` | 手持ちの服の登録(4.11)。Web ではファイル選択、スマホでは写真・カメラ |
 
 ## 2. アーキテクチャ
 
@@ -57,7 +58,7 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 │   app/schemas/        ── Pydantic モデル(API 契約)                  │
 │   app/core/           ── 設定(config) / ロギング                    │
 │   app/services/youtube.py ── YouTube Data API を httpx で直接呼ぶ   │
-│   app/services/culture.py, live.py ── Gemini を直接呼ぶ             │
+│   app/services/culture.py, live.py, outfit.py ── Gemini を直接呼ぶ  │
 └──────────────────────────────────┼──────────────────────────────────┘
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -137,14 +138,19 @@ tx_hackathon_gc/
 │   │   ├── main.py           # エントリポイント(create_app)
 │   │   ├── api/
 │   │   │   ├── router.py     # ルータ集約
-│   │   │   └── routes/       # health.py, chat.py, youtube.py, culture.py, live.py
+│   │   │   └── routes/       # health.py, chat.py, youtube.py, culture.py, live.py, wardrobe.py,
+│   │   │                     #   outfit.py
 │   │   ├── core/             # config.py, logging.py
-│   │   ├── schemas/          # Pydantic モデル(chat.py, youtube.py, culture.py, live.py)
+│   │   ├── schemas/          # Pydantic モデル(chat.py, youtube.py, culture.py, live.py, wardrobe.py,
+│   │   │                     #   outfit.py)
 │   │   ├── services/         # agent.py, agent_loop.py, verification.py, media.py,
 │   │   │                     #   cloth_index.py, wardrobe.py, youtube.py, mv_title.py,
-│   │   │                     #   culture.py, live.py, grounding.py ほか
+│   │   │                     #   culture.py, live.py, grounding.py,
+│   │   │                     #   wardrobe_store.py, wardrobe_registry.py, outfit.py ほか
+│   │   ├── assets/           # アプリが使う固定の画像(コーデ画像のマネキン white_manekin.jpeg。Git 管理)
 │   │   ├── created_images/   # 生成された画像の保存先(Git 管理外)
 │   │   └── created_videos/   # 生成された動画の保存先(Git 管理外)
+│   ├── data/wardrobe/        # 登録した手持ちの服(index.json と images/。Git 管理外)
 │   ├── scripts/
 │   │   ├── run_agent.py      # 対話でエージェントを動かす CLI
 │   │   ├── run_agent_loop.py # 生成 → 検証 → 再生成 を繰り返す CLI
@@ -158,7 +164,7 @@ tx_hackathon_gc/
 │   ├── lib/
 │   │   ├── main.dart
 │   │   ├── core/             # app_config.dart, api_client.dart
-│   │   └── features/         # 機能ごと(chat/, mv_lookup/)
+│   │   └── features/         # 機能ごと(chat/, mv_lookup/, wardrobe/, outfit/)
 │   └── test/
 ├── docs/
 │   └── spec/                 # SPEC 駆動開発のドキュメント
@@ -173,7 +179,9 @@ tx_hackathon_gc/
 │       ├── 006-wardrobe-tools/
 │       ├── 007-youtube-mv-metadata/
 │       ├── 008-artist-culture-info/
-│       └── 009-live-info-search/
+│       ├── 009-live-info-search/
+│       ├── 010-wardrobe-registration/
+│       └── 011-outfit-suggestion/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
 ```
@@ -223,11 +231,12 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `IMAGE_MODEL` | `gemini-3.1-flash-lite-image` | 画像生成モデル |
 | `VIDEO_MODEL` | `gemini-omni-1.1-flash-preview` | 動画生成モデル(Interactions API 経由) |
 | `CREATED_IMAGES_DIR` / `CREATED_VIDEOS_DIR` | `app/created_images` / `app/created_videos` | 生成物の保存先(backend/ からの相対) |
-| `MEDIA_GENERATION_TIMEOUT` | `300` | 動画生成の待ち時間上限(秒) |
+| `MEDIA_GENERATION_TIMEOUT` | `300` | 動画生成と、コーデ画像の生成(4.12)の待ち時間上限(秒) |
 | `VERIFIER_MODEL` | `gemini-3.5-flash-lite` | ループの検証に使うモデル(生成モデルとクォータを分けたいときは別のモデルにする) |
 | `LOOP_MAX_ITERATIONS` | `3` | 生成 → 検証 を繰り返す上限回数 |
-| `CLOTH_INDEX_MODEL` | `gemini-3.5-flash-lite` | 服画像から属性を抽出するモデル |
-| `CLOTH_INDEX_PATH` | `tests/sample_cloth_indexs/index.json` | エージェントが参照する服インデックス |
+| `CLOTH_INDEX_MODEL` | `gemini-3.5-flash-lite` | 服画像から属性(季節・暖かさ・使う場面を含む)を抽出するモデル |
+| `CLOTH_INDEX_PATH` | `data/wardrobe/index.json` | 登録した手持ちの服のインデックス(4.11)。エージェント(4.7)もここを参照する。写真は同じフォルダの `images/` |
+| `WARDROBE_MAX_IMAGE_BYTES` | `10485760` | 登録する写真 1 枚の上限(10 MB) |
 | `YOUTUBE_DATA_API_KEY` | 空 | YouTube Data API v3 の API キー(**秘匿情報**。3.4) |
 | `YOUTUBE_SEARCH_MAX_RESULTS` | `5` | MV 名で検索したときの候補数 |
 | `YOUTUBE_REGION_CODE` | `JP` | 検索結果の地域。空なら指定しない |
@@ -236,6 +245,9 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `CULTURE_TIMEOUT` | `180.0` | カルチャー情報の取得全体の待ち時間上限(秒) |
 | `LIVE_SEARCH_MODEL` | `gemini-3.5-flash-lite` | ライブ情報(4.10)の検索に使うモデル。Google 検索に対応したものを指定する |
 | `LIVE_SEARCH_TIMEOUT` | `120.0` | ライブ情報の検索全体の待ち時間上限(秒) |
+| `OUTFIT_MODEL` | `gemini-3.5-flash-lite` | コーデ提案(4.12)で、手持ちの服から組み合わせを選ぶモデル。画像の生成は `IMAGE_MODEL` |
+| `OUTFIT_TIMEOUT` | `120.0` | コーデ提案(文字)の待ち時間上限(秒) |
+| `OUTFIT_MANNEQUIN_PATH` | `app/assets/white_manekin.jpeg` | 服を着せるマネキン画像(backend/ からの相対) |
 
 ### 3.3 Google Cloud 認証(ADC)
 
@@ -485,7 +497,8 @@ uv run python scripts/run_agent_loop.py -m "この写真に似た雰囲気で作
 
 ### 4.6 服画像のインデックスを作る
 
-服の写真から**素材・形・色・系統**などを抽出して JSON にする。
+服の写真から**素材・形・色・系統・季節・暖かさ・使う場面**などを抽出して JSON にする。
+(アプリから自分の服を登録する場合は 4.11。この CLI は開発用のサンプル作成に使う)
 
 ```bash
 cd backend
@@ -519,7 +532,10 @@ uv run python scripts/build_cloth_index.py --force
           "colors": ["ピンク", "黄色", "赤"],
           "pattern": "プリント",
           "style": "カジュアル",
-          "notes": "「Let's Eat」と書かれた円形プリント"
+          "notes": "「Let's Eat」と書かれた円形プリント",
+          "seasons": ["春", "夏"],
+          "warmth": "薄手",
+          "occasions": ["普段着"]
         }
       ],
       "summary": "床に広げられたピンクの半袖Tシャツ。",
@@ -535,10 +551,11 @@ uv run python scripts/build_cloth_index.py --force
 - 解析 1 枚ごとに `index.json` を書き出すので、途中で中断しても解析済みは残る。
 - 画像以外のファイルは無視する。1 枚の解析に失敗しても残りは処理を続ける。
 - 抽出項目を増やすときは [app/services/cloth_index.py](backend/app/services/cloth_index.py) の `ClothItem` に追加する。
+- 季節・暖かさ・使う場面は決まった選択肢(4.11)。選択肢の外の値は捨てる。項目の無い古い `index.json` もそのまま読める。
 
 ### 4.7 手持ちの服をエージェントに参照させる
 
-4.6 で作った `index.json` を、エージェントが**必要なときだけ**参照する。
+アプリで登録した手持ちの服(4.11)を、エージェントが**必要なときだけ**参照する。
 専用のコマンドは無く、普通に聞けばよい(`run_agent.py` / `run_agent_loop.py` の両方で使える)。
 
 ```bash
@@ -547,18 +564,19 @@ uv run python scripts/run_agent.py -m "私が持っている服を一覧で教�
 uv run python scripts/run_agent.py -m "手持ちのデニムに合うトップスはどれ？"
 uv run python scripts/run_agent_loop.py -m "手持ちの服を使った春コーデの画像を作って"
 
-# 別のインデックスを参照する
-uv run python scripts/run_agent.py --index path/to/index.json -m "手持ちの服は？"
+# サンプル(4.6 の index.json)を参照する
+uv run python scripts/run_agent.py --index tests/sample_cloth_indexs/index.json -m "手持ちの服は？"
 ```
 
 | ツール | 使われる場面 |
 | --- | --- |
 | `list_wardrobe` | 「手持ちの服を教えて」など全体を見るとき |
-| `search_wardrobe(keyword)` | 「デニムに合う服は?」など色・素材・種類で絞るとき |
+| `search_wardrobe(keyword)` | 「デニムに合う服は?」「冬に着られる服は?」など色・素材・種類・季節・使う場面で絞るとき |
 
 - **呼ぶ判断はモデルに任せている。** 服と無関係な質問(例: 「1+1は?」)ではインデックスを読まない。
 - インデックスが無い場合もエラーにならず、「作成されていない」と応答する。
-- 参照先は `CLOTH_INDEX_PATH`(既定 `tests/sample_cloth_indexs/index.json`)または `--index` で指定する。
+- 参照先は `CLOTH_INDEX_PATH`(既定 `data/wardrobe/index.json` = アプリで登録した服)または `--index` で指定する。
+  ツールは呼ばれるたびにファイルを読むため、登録・削除はすぐに反映される。
 - 渡すのは属性テキストのみで、画像そのものは渡さない。
 
 ### 4.8 MV の URL / 名前からメタ情報を調べる
@@ -688,6 +706,84 @@ curl -s -X POST http://localhost:8000/api/v1/live/search   -H "Content-Type: app
 `query` と `date` はどちらか一方でよい(両方空なら 422)。`artist` は省略可。
 応答の形は [docs/spec/009-live-info-search/design.md](docs/spec/009-live-info-search/design.md) の 3. を参照。
 
+### 4.11 手持ちの服の写真を登録する
+
+Web アプリの下部ナビゲーション「**手持ちの服**」で、服の写真を登録・一覧・削除できる。
+登録した服は Gemini が属性(文字情報)にして保存し、チャットのエージェント(4.7)や後続の服装の提案で使う。
+
+1. 右下の「**写真を追加**」から写真を選ぶ(jpg / png / webp、**1 回 10 枚まで**。長辺 1600px に縮小して送る)。
+2. 確認画面で **1 枚ずつ順に**解析される(「解析中 2 / 5」と表示)。1 枚に複数の服が写っていれば服ごとに分かれる。
+3. 解析結果を確認し、必要なら直す。写真ごと・服ごとに登録から外せる。
+4. 「**N 点を保存**」で保存する。キャンセルすれば何も保存されない(解析だけではサーバに何も残らない)。
+5. 一覧の削除ボタン(確認あり)で、服 1 点ずつ削除できる。
+
+| 抽出する項目 | 値 |
+| --- | --- |
+| 種類・素材・形・色・柄・系統・特徴 | 自由な語(4.6 と同じ) |
+| 季節 | 春 / 夏 / 秋 / 冬 から複数 |
+| 暖かさ | 薄手 / 普通 / 厚手 から 1 つ |
+| 使う場面 | 普段着 / きれいめ(食事・オフィス) / フォーマル / スポーツ・アウトドア / ライブ・フェス から複数 |
+
+- 保存先は `CLOTH_INDEX_PATH`(既定 `backend/data/wardrobe/index.json`)と、同じフォルダの `images/`。**Git 管理外**。
+  形式は 4.6 の `index.json` に服ごとの `id` を足したもの。Docker Compose ではホストの `backend/` に残る。
+  Cloud Run などに載せると再起動で消える(将来 Cloud に移す。spec 010 の未決事項 1)。
+- 既存のサンプル(`tests/sample_cloth_indexs`)は取り込まない。一覧は 0 件から始まる。
+- 服が写っていない写真・対応していない形式(HEIC など)・10 MB を超える写真は、その写真だけエラーになる。
+  Gemini の失敗(クォータ超過など)は「再解析」で解析し直せる。
+- 保存後の属性の編集はできない(直すときは削除して登録し直す)。
+
+API から直接呼ぶ場合(画像は base64):
+
+```bash
+# 解析(保存しない)
+curl -s -X POST http://localhost:8000/api/v1/wardrobe/analyze   -H "Content-Type: application/json"   -d "{\"image\": {\"mime_type\": \"image/jpeg\", \"data\": \"$(base64 -w0 shirt.jpg)\"}}"
+
+# 一覧 / 削除
+curl -s http://localhost:8000/api/v1/wardrobe/items
+curl -s -X DELETE http://localhost:8000/api/v1/wardrobe/items/<id>
+```
+
+保存(`POST /api/v1/wardrobe/items`)や応答の形は [docs/spec/010-wardrobe-registration/design.md](docs/spec/010-wardrobe-registration/design.md) の 3. を参照。
+
+### 4.12 情報を確認して、手持ちの服からコーデを提案する
+
+Web アプリの下部ナビゲーション「**確認**」で、他のタブで入力・取得した情報をまとめて確認し、コーデの提案を受けられる。
+
+| 欄 | 内容 | どこで取得するか |
+| --- | --- | --- |
+| 入力 | MV 名 / URL、ライブ検索の条件(ライブ情報・日付) | MV 検索タブ |
+| MV 情報 / アーティスト情報 | サムネイル・曲名・アーティスト名・リンク / 特定したアーティスト名と概要 | MV 検索タブ(4.8) |
+| カルチャー情報 | ファッション・ビジュアルの傾向、「この MV の衣装」、音楽ジャンル | MV 検索タブ(動画を選ぶと自動。4.9) |
+| ライブ情報 | 選んだライブのライブ名・場所・日付と当日の天気 | MV 検索タブの「ライブを探す」(4.10) |
+| 手持ちの服 | 小さな写真の横並び(横スクロール)。1 画面に幅 600 未満で 4 枚、1024 未満で 6 枚、それ以上で 8 枚 | 手持ちの服タブ(4.11) |
+
+- 確認タブは**表示専用**。まだ取得していない欄には「まだありません(…タブで…)」と出る。他のタブで変えた内容はそのまま反映される
+  (手持ちの服はタブを開くたびに読み直す)。
+- 「**コーデを提案**」は、**手持ちの服 1 点以上・MV・選んだライブ**がそろったときだけ押せる(足りないものは画面に出る)。
+  カルチャー情報の取得中は、終わるまで押せない。
+- 押すと次の 2 段階で進む。もう一度押すと作り直し、前の結果は置き換わる(履歴は残さない)。
+  1. **提案**(`OUTFIT_MODEL`): 手持ちの服のインデックス・MV・アーティスト・カルチャー・ライブ・天気をまとめて Gemini に渡し、
+     手持ちの服から 1 コーデを選ばせる。Google 検索は使わない。**手持ちに無い服(ID)を返しても、サーバ側で取り除く**(除いた点数を画面に出す)。
+  2. **画像**(`IMAGE_MODEL` = Nano Banana 2 Flash Lite): マネキン画像(`OUTFIT_MANNEQUIN_PATH`)と、提案の服が写った**登録した写真そのもの**を渡し、
+     マネキンに着せた画像を 1 枚作る。1 枚の写真に複数の服が写っていれば、どの服を使うかを指示文で伝える。
+     画像は `backend/app/created_images/outfit-*` にも残る(Git 管理外。4.4 と同じ)。
+- 画像だけ失敗したときは、提案は表示したまま「画像を作り直す」で画像だけやり直せる。
+- 所要時間の目安は、提案が数秒〜十数秒、画像が十数秒〜数十秒。
+
+API から直接呼ぶ場合:
+
+```bash
+# 提案(video / live は MV 検索・ライブ検索の応答をそのまま渡す。culture は省略可)
+curl -s -X POST http://localhost:8000/api/v1/outfit/suggest -H "Content-Type: application/json" \
+  -d '{"video": {...}, "culture": {...}, "live": {...}}'
+
+# 画像(item_ids は提案の items の id。手持ちに無い ID は 400)
+curl -s -X POST http://localhost:8000/api/v1/outfit/image -H "Content-Type: application/json" \
+  -d '{"item_ids": ["<id>", "<id>"], "title": "晴れの日のライブコーデ"}'
+```
+
+応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. を参照。
+
 ---
 
 ## 5. テスト / 静的解析
@@ -796,6 +892,8 @@ docs/spec/001-user-authentication/
 | [007-youtube-mv-metadata](docs/spec/007-youtube-mv-metadata/) | YouTube の MV からメタ情報(アーティスト名・曲名など)を取得 | done |
 | [008-artist-culture-info](docs/spec/008-artist-culture-info/) | アーティストのカルチャー情報(ファッション・経歴・MV の衣装)を Gemini + Google 検索 + 映像解析で調べて整理 | done |
 | [009-live-info-search](docs/spec/009-live-info-search/) | ライブ情報(ライブ名・場所・日付・当日の天気)の検索と、MV 候補のその場での展開 | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
+| [010-wardrobe-registration](docs/spec/010-wardrobe-registration/) | 手持ちの服の写真を登録(Gemini で属性を抽出して保存)・一覧・削除 | done |
+| [011-outfit-suggestion](docs/spec/011-outfit-suggestion/) | 情報の確認タブと、手持ちの服からのコーデ提案(マネキンに着せた画像の生成) | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
 
 ---
 
@@ -1007,6 +1105,14 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | ライブの天気が「予報はまだありません」になる | 公演日が 2 週間より先。予報が出るまでは取得できない(サーバ側で根拠の無い値を取り除いている) |
 | ライブの天気が「不明」になる | Gemini が天気を検索で確認できなかった(出典の無い天気は推測の可能性があるため出さない)。時間をおいて再検索する |
 | 「この MV の衣装」だけが `映像を解析できませんでした` | 非公開・限定公開・年齢制限のある動画は解析できない。公開動画でも出る場合は、`CULTURE_MODEL` が YouTube の動画入力に対応しているか確認する(Vertex AI ではプレビュー機能) |
+| エージェントや「手持ちの服」がサンプルの服を返す / 登録した服が `tests/` に書き込まれる | `backend/.env` の `CLOTH_INDEX_PATH` が `tests/sample_cloth_indexs/index.json` のまま。`data/wardrobe/index.json` に変える(または行を消して既定を使う) |
+| 写真の登録で `写真が大きすぎます`(413) | 1 枚 10 MB まで(`WARDROBE_MAX_IMAGE_BYTES`)。アプリは長辺 1600px に縮小して送るため、通常は API を直接呼んだときだけ起きる |
+| 写真が `対応していない形式です` になる | jpg / png / webp のみ対応。iPhone の HEIC は「設定 → カメラ → フォーマット → 互換性優先」で JPEG にする |
+| 「コーデを提案」が押せない | 確認タブの「足りないもの」を見る。手持ちの服 1 点以上・MV の表示・「ライブを探す」での候補の選択が必要。カルチャー情報の取得中も押せない |
+| コーデ画像が `マネキン画像が見つかりません`(502) | `backend/app/assets/white_manekin.jpeg` が無い(未コミット・未取得など)か、`OUTFIT_MANNEQUIN_PATH` の誤り。パスは backend/ からの相対 |
+| コーデ画像が `モデルが画像を返しませんでした`(502) | 同じ入力でも時々画像が返らないことがある。「画像を作り直す」で再試行する。続く場合はバックエンドのログの `finish_reason`(安全フィルタなど)を見て、`IMAGE_MODEL` が画像の入力と出力に対応しているか確認する |
+| コーデ提案が `手持ちの服からコーデを作れませんでした`(502) | Gemini が手持ちに無い服だけを返した(サーバ側で取り除いた結果 0 点)。もう一度押す。服の登録が少ない場合は増やす |
+| コーデ提案 / 画像が `Gemini のクォータ…`(503)/ `… 秒以内に終わりませんでした`(504) | 時間をおく、`OUTFIT_MODEL`(提案)・`IMAGE_MODEL`(画像)を変える、`OUTFIT_TIMEOUT` / `MEDIA_GENERATION_TIMEOUT` を延ばす |
 | 検索候補が文字(検索クエリ)で表示される | Web 以外で実行している。検索候補の HTML は Web でのみ描画する(4.9) |
 | MV 検索でサムネイルが出ずアイコンになる | 画像の読み込みに失敗している。Flutter Web で CORS に引っかかる場合は `<img>` 表示に切り替える設定済み(`WebHtmlElementStrategy.fallback`)。ブラウザの開発者ツールでネットワークエラーを確認する |
 | compose で `http://localhost:8080` が白画面 | フロントを debug で起動している。compose は `--release` 必須(4.1)。debug だと DWDS が `Bad state: Not connected to an application` を返し続け、`main()` が起動しない。ブラウザのコンソールに同エラーが並ぶのが目印 |

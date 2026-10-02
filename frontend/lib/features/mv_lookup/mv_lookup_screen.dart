@@ -7,6 +7,7 @@ import 'culture_section.dart';
 import 'live_models.dart';
 import 'live_repository.dart';
 import 'live_section.dart';
+import 'mv_lookup_snapshot.dart';
 import 'mv_models.dart';
 import 'mv_repository.dart';
 import 'utils.dart';
@@ -22,17 +23,22 @@ typedef _LiveQuery = ({String query, DateTime? date, String? artist});
 /// - 動画情報が表示されたら、そのアーティストのカルチャー情報(spec 008)も自動で調べる。
 /// - 候補を選ぶと、画面を切り替えずにその候補の直下に情報を展開する(spec 009)。
 /// - 下部の「ライブを探す」で、ライブ情報と当日の天気を調べられる(spec 009)。
+/// - 状態が変わるたびに、要約を [onChanged] で外へ出す(確認タブ用。spec 011)。
 class MvLookupScreen extends StatefulWidget {
   const MvLookupScreen({
     super.key,
     this.repository,
     this.cultureRepository,
     this.liveRepository,
+    this.onChanged,
   });
 
   final MvRepository? repository;
   final CultureRepository? cultureRepository;
   final LiveRepository? liveRepository;
+
+  /// 状態が変わったときに呼ばれる(確認タブに渡すため)
+  final ValueChanged<MvLookupSnapshot>? onChanged;
 
   @override
   State<MvLookupScreen> createState() => _MvLookupScreenState();
@@ -46,6 +52,8 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
       widget.liveRepository ?? LiveRepository();
   final _controller = TextEditingController();
   bool _loading = false;
+  // 最後に実行した MV の入力(確認タブに出すため)
+  String _mvQuery = '';
   // 0 件の表示と初期表示を区別するため
   bool _searched = false;
   String? _error;
@@ -68,16 +76,33 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
   /// 動画情報・カルチャー情報・ライブ情報のいずれかを取得中。この間は他の入力を受け付けない
   bool get _busy => _loading || _cultureLoading || _liveLoading;
 
-  /// 表示中の動画のアーティスト。カルチャー情報で特定した名前を優先し、
-  /// 無ければタイトルを分解できた場合の名前を使う(spec 009)。
-  String? get _knownArtist {
-    final video = _video;
-    if (video == null) return null;
-    final culture = _culture;
-    if (culture != null && culture.identified && culture.artist.isNotEmpty) {
-      return culture.artist;
-    }
-    return video.titleParsed ? video.artist : null;
+  /// 表示中の動画のアーティスト(決め方は MvLookupSnapshot.artist)
+  String? get _knownArtist => _snapshot().artist;
+
+  /// 状態の要約(確認タブ用)
+  MvLookupSnapshot _snapshot() {
+    final selected = _live?.candidates.where(
+      (c) => c.index == _selectedLiveIndex,
+    );
+    return MvLookupSnapshot(
+      mvQuery: _mvQuery,
+      video: _video,
+      culture: _culture,
+      cultureLoading: _cultureLoading,
+      liveQuery: _lastLiveQuery?.query ?? '',
+      liveDate: _lastLiveQuery?.date,
+      liveResult: _live,
+      selectedLive: selected == null || selected.isEmpty
+          ? null
+          : selected.first,
+    );
+  }
+
+  /// 状態を変えるたびに、要約を外へ出す(確認タブに反映するため。spec 011)
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    widget.onChanged?.call(_snapshot());
   }
 
   @override
@@ -93,6 +118,7 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
       setState(() => _error = '入力が空です。YouTube の URL または MV 名を入力してください');
       return;
     }
+    _mvQuery = query;
     await _lookup(query);
   }
 

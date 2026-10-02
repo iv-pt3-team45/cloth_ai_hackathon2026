@@ -62,6 +62,9 @@ def item_text(item: WardrobeItem) -> str:
             item.pattern,
             item.style,
             item.notes,
+            " ".join(item.seasons),
+            item.warmth,
+            " ".join(item.occasions),
         ]
     )
 
@@ -87,6 +90,7 @@ def _no_index(index_file: Path) -> dict[str, Any]:
         "status": "error",
         "message": (
             f"服のインデックスが見つかりません({index_file})。"
+            "アプリの「手持ちの服」タブから写真を登録するか、"
             "`uv run python scripts/build_cloth_index.py` で作成してください。"
         ),
     }
@@ -107,7 +111,8 @@ def build_wardrobe_tools(settings: Settings | None = None) -> list[Callable[...,
         コーディネートを提案する前には、まずこれで何を持っているか確認すること。
 
         Returns:
-            status="ok" と服の一覧 items(種類・素材・形・色・柄・系統・特徴)。
+            status="ok" と服の一覧 items
+            (種類・素材・形・色・柄・系統・特徴・季節・暖かさ・使う場面)。
             インデックスが無い場合は status="error"。
         """
         items = load_wardrobe(bound.cloth_index_file)
@@ -118,11 +123,12 @@ def build_wardrobe_tools(settings: Settings | None = None) -> list[Callable[...,
     def search_wardrobe(keyword: str) -> dict[str, Any]:
         """利用者が持っている服を、キーワードで絞り込んで取得する。
 
-        色・素材・種類・系統などで探すときに使う(例: 「白」「デニム」「Tシャツ」)。
+        色・素材・種類・系統・季節・使う場面などで探すときに使う
+        (例: 「白」「デニム」「冬」「ライブ・フェス」)。
         一覧をすべて見たい場合は list_wardrobe を使う。
 
         Args:
-            keyword: 検索語。服の属性(種類・素材・形・色・柄・系統・特徴)に
+            keyword: 検索語。服の属性(種類・素材・形・色・柄・系統・特徴・季節・暖かさ・使う場面)に
                 部分一致で照合する。空文字なら全件を返す。
 
         Returns:

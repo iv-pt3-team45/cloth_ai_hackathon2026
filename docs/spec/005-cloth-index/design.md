@@ -51,6 +51,10 @@ class ClothIndexEntry(BaseModel): # 保存する 1 件
 
 `index.json` は `{"generated_at", "model", "source_dir", "entries": [ClothIndexEntry, ...]}`。
 
+> **spec 010 で変更**: `ClothItem` に `seasons`(季節)・`warmth`(暖かさ)・`occasions`(使う場面)を既定値つきで追加した。
+> 値は決まった選択肢で、`normalize_item()` が選択肢の外の値を捨てる。項目の無い既存の `index.json` もそのまま読める。
+> 画像データを受け取る `analyze_cloth_bytes()` を追加し、`analyze_cloth_image()` はそれを呼ぶ形にした。
+
 ## 4. バックエンド設計
 
 ### `app/services/cloth_index.py`(新規)

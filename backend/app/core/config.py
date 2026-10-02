@@ -59,10 +59,14 @@ class Settings(BaseSettings):
     verifier_model: str = "gemini-3.5-flash-lite"
     loop_max_iterations: int = 3
 
-    # --- 服インデックス ---
+    # --- 服インデックス / 手持ちの服の登録(spec 005 / 006 / 010) ---
     cloth_index_model: str = "gemini-3.5-flash-lite"
-    # エージェントが参照する服インデックス(backend/ からの相対パス)
-    cloth_index_path: str = "tests/sample_cloth_indexs/index.json"
+    # 登録した服のインデックス(backend/ からの相対パス)。エージェントもここを参照する。
+    # 写真は同じフォルダの images/ に保存する。サンプルを参照したいときは
+    # tests/sample_cloth_indexs/index.json を指定する(CLI なら --index)
+    cloth_index_path: str = "data/wardrobe/index.json"
+    # 登録する写真 1 枚の上限(バイト)
+    wardrobe_max_image_bytes: int = 10 * 1024 * 1024
 
     # --- YouTube Data API ---
     # 【例外】API キーを使う。YouTube Data API は ADC の既定スコープ(cloud-platform)では呼べないため
@@ -87,6 +91,13 @@ class Settings(BaseSettings):
 
     # --- 会場情報取得(F14) ---
     venue_info_model: str = "gemini-2.5-flash"
+    # --- 手持ちの服からのコーデ提案(spec 011) ---
+    # 提案(文字)に使うモデル。画像の生成は IMAGE_MODEL を使う
+    outfit_model: str = "gemini-3.5-flash-lite"
+    # 提案の待ち時間の上限(秒)。画像の生成は MEDIA_GENERATION_TIMEOUT
+    outfit_timeout: float = 120.0
+    # 提案の服を着せるマネキン画像(backend/ からの相対パス)
+    outfit_mannequin_path: str = "app/assets/white_manekin.jpeg"
 
     gemini_system_instruction: str = "あなたは日本語で簡潔かつ正確に回答するアシスタントです。"
 
@@ -103,6 +114,11 @@ class Settings(BaseSettings):
     def created_videos_path(self) -> Path:
         """生成動画の保存先(絶対パス)。"""
         return (BACKEND_ROOT / self.created_videos_dir).resolve()
+
+    @property
+    def outfit_mannequin_file(self) -> Path:
+        """コーデ提案で服を着せるマネキン画像の絶対パス。"""
+        return (BACKEND_ROOT / self.outfit_mannequin_path).resolve()
 
     @property
     def cloth_index_file(self) -> Path:
