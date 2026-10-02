@@ -1,71 +1,105 @@
 {
-  "generated_at": "2026-09-17T15:48:06+09:00",
+  "generated_at": "2026-09-30T08:53:45+00:00",
   "model": "gemini-2.5-flash",
-  "source_dir": "tests\\sample_images",
+  "source_dir": "app",
   "count": 5,
   "entries": [
     {
-      "image": "image (1).jpeg",
-      "items": [
-        {
-          "category": "ロングTシャツ",
-          "material": "綿",
-          "shape": "長袖クルーネック",
-          "colors": [
-            "パープル",
-            "ホワイト"
-          ],
-          "pattern": "プリント",
-          "style": "ストリート",
-          "notes": "フロントに、ビーニーとヘッドホンを着用したドクロ、星のモチーフ、「髑髏」「パンク」「東京」の文字が描かれたグラフィックプリント。"
-        }
-      ],
-      "summary": "木製の床に置かれた長袖のTシャツ。",
-      "model": "gemini-2.5-flash",
-      "analyzed_at": "2026-09-17T15:42:40+09:00"
-    },
-    {
-      "image": "image (2).jpeg",
-      "items": [
-        {
-          "category": "ジーンズ",
-          "material": "デニム",
-          "shape": "ストレート",
-          "colors": [
-            "青",
-            "インディゴ",
-            "水色"
-          ],
-          "pattern": "色落ち加工",
-          "style": "カジュアル",
-          "notes": "フロントはボタンフライ。全体的に色落ちとヒゲ、ハチノス（膝裏のシワによる色落ち）が見られる。ウエスト部分に「DEFFO YAMATO」のブランドロゴがある。"
-        }
-      ],
-      "summary": "フローリングの床に置かれた、色落ち加工が施されたデニムジーンズ。",
-      "model": "gemini-2.5-flash",
-      "analyzed_at": "2026-09-17T15:42:45+09:00"
-    },
-    {
-      "image": "image-20260917-153230-44bfd8.jpg",
+      "image": "cloth-20260930-085051-3f653a.jpg",
       "items": [
         {
           "category": "シャツ",
           "material": "綿",
-          "shape": "長袖ボタンダウンシャツ",
+          "shape": "長袖襟付きシャツ",
           "colors": [
-            "ネイビー"
+            "赤",
+            "黒",
+            "青"
+          ],
+          "pattern": "チェック",
+          "style": "カジュアル",
+          "notes": "バッファローチェック柄、胸ポケットが2つ",
+          "seasons": [
+            "秋",
+            "冬"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "スポーツ・アウトドア"
+          ],
+          "id": "815b5f4a6b9f"
+        }
+      ],
+      "summary": "赤と黒を基調としたチェック柄の長袖シャツが写っています。",
+      "model": "gemini-2.5-flash",
+      "analyzed_at": "2026-09-30T08:50:51+00:00"
+    },
+    {
+      "image": "cloth-20260930-085051-2cf2f6.jpg",
+      "items": [
+        {
+          "category": "パンツ",
+          "material": "綿",
+          "shape": "長ズボン",
+          "colors": [
+            "ベージュ"
           ],
           "pattern": "無地",
           "style": "カジュアル",
-          "notes": "ボタンダウンカラー、しわ感のある素材"
+          "notes": "フロントボタンとジッパーフライ、サイドポケットが付いた一般的なチノパンツ",
+          "seasons": [
+            "春",
+            "夏",
+            "秋",
+            "冬"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "きれいめ"
+          ],
+          "id": "839ecbf83d95"
         }
       ],
-      "summary": "木製の床の上にきれいに畳まれた長袖シャツが置かれている。",
+      "summary": "ベージュのチノパンツが折り畳まれた状態で写っている画像です。",
       "model": "gemini-2.5-flash",
-      "analyzed_at": "2026-09-17T15:42:48+09:00"
+      "analyzed_at": "2026-09-30T08:50:51+00:00"
     },
     {
-      "image": "image-20260917-153247-81d0d9.jpg",
+      "image": "cloth-20260930-085051-e3d7ae.jpg",
+      "items": [
+        {
+          "category": "パンツ",
+          "material": "デニム",
+          "shape": "ストレート",
+          "colors": [
+            "ブラック",
+            "グレー"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "全体的に色落ち感のあるブラックジーンズ",
+          "seasons": [
+            "春",
+            "夏",
+            "秋",
+            "冬"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "ライブ・フェス"
+          ],
+          "id": "85a165427921"
+        }
+      ],
+      "summary": "ブラックデニムのパンツが1点写っています。",
+      "model": "gemini-2.5-flash",
+      "analyzed_at": "2026-09-30T08:50:51+00:00"
+    },
+    {
+      "image": "cloth-20260930-085052-cc62ec.jpg",
       "items": [
         {
           "category": "Tシャツ",
@@ -76,33 +110,54 @@
           ],
           "pattern": "無地",
           "style": "カジュアル",
-          "notes": "特になし"
+          "notes": "特になし",
+          "seasons": [
+            "春",
+            "夏",
+            "秋"
+          ],
+          "warmth": "薄手",
+          "occasions": [
+            "普段着",
+            "スポーツ・アウトドア"
+          ],
+          "id": "e949022d3335"
         }
       ],
-      "summary": "木製の床の上に白い半袖Tシャツが平置きされている画像です。",
+      "summary": "ベッドの上に置かれた白い無地のTシャツの写真です。",
       "model": "gemini-2.5-flash",
-      "analyzed_at": "2026-09-17T15:42:51+09:00"
+      "analyzed_at": "2026-09-30T08:50:52+00:00"
     },
     {
-      "image": "image.jpeg",
+      "image": "cloth-20260930-085052-06c432.jpg",
       "items": [
         {
           "category": "Tシャツ",
           "material": "綿",
           "shape": "半袖クルーネック",
           "colors": [
-            "ピンク",
-            "黄色",
-            "赤"
+            "黒"
           ],
-          "pattern": "プリント",
+          "pattern": "無地",
           "style": "カジュアル",
-          "notes": "「Let's Eat」と書かれた、ひび割れたような質感の円形プリント。文字は赤、円の背景は黄色で縁取りは赤。"
+          "notes": "特になし",
+          "seasons": [
+            "春",
+            "夏",
+            "秋"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "スポーツ・アウトドア",
+            "ライブ・フェス"
+          ],
+          "id": "b51abee046b4"
         }
       ],
-      "summary": "床に広げられたピンクの半袖Tシャツ。前面に「Let's Eat」と書かれた黄色と赤の円形プリントが施されています。",
+      "summary": "黒色の無地の半袖Tシャツが床に平置きされています。",
       "model": "gemini-2.5-flash",
-      "analyzed_at": "2026-09-17T15:42:54+09:00"
+      "analyzed_at": "2026-09-30T08:50:52+00:00"
     }
   ]
 }

@@ -1,18 +1,27 @@
 """服インデックス作成のテスト(外部 API は呼ばない)。"""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
+from google.genai import types
+
+from app.core.config import Settings
 from app.services.cloth_index import (
     INDEX_FILE_NAME,
+    ClothAnalysis,
     ClothIndexEntry,
     ClothIndexError,
     ClothItem,
+    analyze_cloth_bytes,
     build_cloth_index,
     guess_mime_type,
     index_path,
     list_images,
     load_index,
+    normalize_item,
     save_index,
 )
 
@@ -181,3 +190,116 @@ def test_build_cloth_index_continues_after_failure(tmp_path: Path) -> None:
 
     assert [e.image for e in entries] == ["b.jpg"]
     assert statuses == ["failed", "analyzed"]
+
+
+# --- spec 010: 季節・暖かさ・使う場面と、画像データでの解析 -------------------
+
+
+def test_normalize_item_keeps_only_choices() -> None:
+    """選択肢の外の値は捨て、選択肢の順に並べる。説明つきの値は先頭の語で照合する。"""
+    item = ClothItem(
+        category="コート",
+        material="ウール",
+        shape="ロング",
+        seasons=["冬", "春", "夏季", "春"],
+        warmth="やや厚手",
+        occasions=["ライブ・フェス", "きれいめ(食事・オフィス)", "デート"],
+    )
+
+    normalized = normalize_item(item)
+
+    assert normalized.seasons == ["春", "冬"]
+    assert normalized.warmth == ""
+    assert normalized.occasions == ["きれいめ", "ライブ・フェス"]
+    assert normalize_item(item.model_copy(update={"warmth": "厚手"})).warmth == "厚手"
+
+
+def test_old_index_without_new_fields_is_readable(tmp_path: Path) -> None:
+    """項目の無い既存の index.json(spec 005)も既定値で読める。"""
+    index_path(tmp_path).write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {
+                        "image": "a.jpg",
+                        "items": [{"category": "Tシャツ", "material": "綿", "shape": "半袖"}],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    item = load_index(tmp_path)["a.jpg"].items[0]
+
+    assert (item.seasons, item.warmth, item.occasions) == ([], "", [])
+
+
+def fake_client(respond: Callable[..., Any]) -> Any:
+    calls: list[dict[str, Any]] = []
+
+    def generate_content(**kwargs: Any) -> Any:
+        calls.append(kwargs)
+        return respond(**kwargs)
+
+    return SimpleNamespace(models=SimpleNamespace(generate_content=generate_content), calls=calls)
+
+
+def test_analyze_cloth_bytes_normalizes_result() -> None:
+    raw = ClothAnalysis(
+        items=[
+            ClothItem(
+                category="Tシャツ",
+                material="綿",
+                shape="半袖",
+                seasons=["夏", "真夏"],
+                warmth="薄手",
+                occasions=["普段着", "ライブ・フェス(屋外)"],
+            )
+        ],
+        summary="白い T シャツ",
+    )
+    client = fake_client(lambda **kwargs: types.GenerateContentResponse(parsed=raw))
+
+    analysis = analyze_cloth_bytes(
+        b"\xff\xd8\xffdata", "image/jpeg", settings=Settings(), client=client
+    )
+
+    item = analysis.items[0]
+    assert (item.seasons, item.warmth, item.occasions) == (
+        ["夏"],
+        "薄手",
+        ["普段着", "ライブ・フェス"],
+    )
+    call = client.calls[0]
+    image_part = call["contents"][0].parts[0]
+    assert image_part.inline_data.mime_type == "image/jpeg"
+    assert call["config"].response_schema is ClothAnalysis
+    assert call["config"].automatic_function_calling.disable is True
+
+
+def test_analyze_cloth_bytes_keeps_cause_of_failure() -> None:
+    """呼び出し側がクォータ超過などを判定できるよう、元の例外を __cause__ に残す。"""
+    original = RuntimeError("quota")
+
+    def fail(**kwargs: Any) -> Any:
+        raise original
+
+    try:
+        analyze_cloth_bytes(b"x", "image/png", settings=Settings(), client=fake_client(fail))
+    except ClothIndexError as exc:
+        assert exc.__cause__ is original
+    else:  # pragma: no cover - 失敗時のみ
+        raise AssertionError("ClothIndexError が送出されるべき")
+
+
+def test_analyze_cloth_bytes_rejects_unreadable_response() -> None:
+    client = fake_client(lambda **kwargs: types.GenerateContentResponse(parsed=None))
+
+    try:
+        analyze_cloth_bytes(b"x", "image/png", settings=Settings(), client=client)
+    except ClothIndexError as exc:
+        assert "解釈" in str(exc)
+    else:  # pragma: no cover - 失敗時のみ
+        raise AssertionError("ClothIndexError が送出されるべき")
