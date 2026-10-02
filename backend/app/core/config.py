@@ -89,6 +89,14 @@ class Settings(BaseSettings):
     # 調査・整理を合わせた待ち時間の上限(秒)
     live_search_timeout: float = 120.0
 
+    # --- 手持ちの服からのコーデ提案(spec 011) ---
+    # 提案(文字)に使うモデル。画像の生成は IMAGE_MODEL を使う
+    outfit_model: str = "gemini-3.5-flash-lite"
+    # 提案の待ち時間の上限(秒)。画像の生成は MEDIA_GENERATION_TIMEOUT
+    outfit_timeout: float = 120.0
+    # 提案の服を着せるマネキン画像(backend/ からの相対パス)
+    outfit_mannequin_path: str = "app/assets/white_manekin.jpeg"
+
     gemini_system_instruction: str = "あなたは日本語で簡潔かつ正確に回答するアシスタントです。"
 
     @property
@@ -104,6 +112,11 @@ class Settings(BaseSettings):
     def created_videos_path(self) -> Path:
         """生成動画の保存先(絶対パス)。"""
         return (BACKEND_ROOT / self.created_videos_dir).resolve()
+
+    @property
+    def outfit_mannequin_file(self) -> Path:
+        """コーデ提案で服を着せるマネキン画像の絶対パス。"""
+        return (BACKEND_ROOT / self.outfit_mannequin_path).resolve()
 
     @property
     def cloth_index_file(self) -> Path:

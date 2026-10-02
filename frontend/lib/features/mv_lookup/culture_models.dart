@@ -36,6 +36,20 @@ class CultureReport {
   final List<String> webSearchQueries;
   final String model;
 
+  /// バックエンドの CultureResponse の形(コーデ提案に送り返す。spec 011)。
+  Map<String, dynamic> toJson() => {
+    'artist': artist,
+    'identified': identified,
+    'message': message,
+    'fashion': fashion.toJson(),
+    'background': background.toJson(),
+    'mv_outfit': mvOutfit.toJson(),
+    'sources': sources.map((s) => s.toJson()).toList(),
+    'search_suggestions_html': searchSuggestionsHtml,
+    'web_search_queries': webSearchQueries,
+    'model': model,
+  };
+
   factory CultureReport.fromJson(Map<String, dynamic> json) => CultureReport(
     artist: json['artist'] as String? ?? '',
     identified: json['identified'] as bool? ?? false,
@@ -71,6 +85,14 @@ class FashionInfo {
   bool get isEmpty =>
       styles.isEmpty && colors.isEmpty && items.isEmpty && worldview.isEmpty;
 
+  Map<String, dynamic> toJson() => {
+    'styles': styles,
+    'colors': colors,
+    'items': items,
+    'worldview': worldview,
+    'source_indices': sourceIndices,
+  };
+
   factory FashionInfo.fromJson(Map<String, dynamic> json) => FashionInfo(
     styles: jsonStrings(json['styles']),
     colors: jsonStrings(json['colors']),
@@ -105,6 +127,15 @@ class BackgroundInfo {
       representativeSongs.isEmpty &&
       musicalTraits.isEmpty;
 
+  Map<String, dynamic> toJson() => {
+    'summary': summary,
+    'history': history,
+    'genres': genres,
+    'representative_songs': representativeSongs,
+    'musical_traits': musicalTraits,
+    'source_indices': sourceIndices,
+  };
+
   factory BackgroundInfo.fromJson(Map<String, dynamic> json) => BackgroundInfo(
     summary: json['summary'] as String? ?? '',
     history: jsonStrings(json['history']),
@@ -130,6 +161,12 @@ class MvOutfit {
 
   bool get isOk => status == 'ok';
 
+  Map<String, dynamic> toJson() => {
+    'status': status,
+    'message': message,
+    'looks': looks.map((l) => l.toJson()).toList(),
+  };
+
   factory MvOutfit.fromJson(Map<String, dynamic> json) => MvOutfit(
     status: json['status'] as String? ?? 'skipped',
     message: json['message'] as String? ?? '',
@@ -145,6 +182,11 @@ class OutfitLook {
 
   final String label;
   final List<OutfitItem> items;
+
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'items': items.map((i) => i.toJson()).toList(),
+  };
 
   factory OutfitLook.fromJson(Map<String, dynamic> json) => OutfitLook(
     label: json['label'] as String? ?? '',
@@ -174,6 +216,16 @@ class OutfitItem {
   final String style;
   final String notes;
 
+  Map<String, dynamic> toJson() => {
+    'category': category,
+    'material': material,
+    'shape': shape,
+    'colors': colors,
+    'pattern': pattern,
+    'style': style,
+    'notes': notes,
+  };
+
   factory OutfitItem.fromJson(Map<String, dynamic> json) => OutfitItem(
     category: json['category'] as String? ?? '',
     material: json['material'] as String? ?? '',
@@ -198,6 +250,13 @@ class CultureSource {
   final String title;
   final String url;
   final String domain;
+
+  Map<String, dynamic> toJson() => {
+    'index': index,
+    'title': title,
+    'url': url,
+    'domain': domain,
+  };
 
   factory CultureSource.fromJson(Map<String, dynamic> json) => CultureSource(
     index: json['index'] as int,
