@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/core/api_client.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_section.dart';
-import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_screen.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_snapshot.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
@@ -21,8 +21,8 @@ Future<List<MvLookupSnapshot>> _pumpScreen(
   addTearDown(tester.view.reset);
   final snapshots = <MvLookupSnapshot>[];
   await tester.pumpWidget(
-    MaterialApp(
-      home: MvLookupScreen(
+    panelApp(
+      MvLookupPanel(
         repository: FakeMvRepository(
           (query) async => const MvLookupResult(inputType: 'url'),
         ),
@@ -38,7 +38,7 @@ Future<List<MvLookupSnapshot>> _pumpScreen(
 
 Future<void> _searchLive(WidgetTester tester) async {
   await tester.enterText(find.byKey(liveQueryFieldKey), '電光石火');
-  await tester.tap(find.widgetWithIcon(IconButton, Icons.travel_explore));
+  await tester.tap(find.byKey(liveSearchButtonKey));
   await tester.pumpAndSettle();
 }
 
@@ -82,6 +82,9 @@ void main() {
 
     await tester.tap(find.text('公演A'));
     await tester.pump();
+    // 選ぶと選んだ候補だけになるため、「変更」で一覧に戻してから選び直す(spec 015)
+    await tester.tap(find.text('変更'));
+    await tester.pump();
     await tester.tap(find.text('公演B'));
     await tester.pump();
 
@@ -112,17 +115,22 @@ void main() {
     expect(snapshots.last.venueFormat, VenueFormat.unknown);
   });
 
-  testWidgets('同じライブをもう一度選んでも、調べ直さない', (tester) async {
+  testWidgets('選んだ候補をもう一度押すと選び直しになり、調べ直さない(spec 015)', (tester) async {
     final venue = FakeVenueRepository();
-    await _pumpScreen(tester, venue);
+    final snapshots = await _pumpScreen(tester, venue);
     await _searchLive(tester);
 
     await tester.tap(find.text('公演A'));
     await tester.pumpAndSettle();
+    expect(snapshots.last.venueFormat, VenueFormat.standing);
+    // 選んだ候補のタイルは「変更」(選択を外して一覧に戻す)
     await tester.tap(find.text('公演A'));
     await tester.pumpAndSettle();
 
     expect(venue.lives, hasLength(1));
+    expect(snapshots.last.selectedLive, isNull);
+    expect(snapshots.last.venueFormat, isNull);
+    expect(snapshots.last.venueFormatLoading, isFalse);
   });
 
   testWidgets('ライブを検索し直すと、会場の形態もリセットする', (tester) async {

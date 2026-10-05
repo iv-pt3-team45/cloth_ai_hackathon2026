@@ -38,6 +38,8 @@ dependencies:
   http: ^1.6.0
   # 手持ちの服の写真を選ぶ(Web / iOS / Android)。spec 010
   image_picker: ^1.2.3
+  # 出典のリンクをタップで開く。spec 015
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

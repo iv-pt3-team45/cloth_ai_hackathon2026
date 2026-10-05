@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import 'culture_models.dart';
 import 'culture_repository.dart';
 import 'culture_section.dart';
@@ -17,19 +19,22 @@ import 'venue_repository.dart';
 /// MV の入力欄(テストで入力欄を区別するため)。
 const mvQueryFieldKey = ValueKey('mv-query');
 
+/// MV の「検索」ボタン。
+const mvSearchButtonKey = ValueKey('mv-search');
+
 /// ライブ情報の検索条件(再試行で同じ条件を使うために残す)。
 typedef _LiveQuery = ({String query, DateTime? date, String? artist});
 
-/// YouTube の URL または MV 名から、MV のメタ情報(アーティスト名・曲名・リンクなど)を調べる画面。
+/// 入力の段階の「① MV を選ぶ」「② 行くライブを検索」の 2 枚のカード(spec 015)。
 ///
-/// - 動画情報が表示されたら、そのアーティストのカルチャー情報(spec 008)も自動で調べる。
-/// - 候補を選ぶと、画面を切り替えずにその候補の直下に情報を展開する(spec 009)。
-/// - 下部の「ライブを探す」で、ライブ情報と当日の天気を調べられる(spec 009)。
-/// - ライブを選ぶと、その会場の形態(スタンディング / 着席など)を裏で調べる(spec 014)。
-///   この画面には出さず、確認タブとコーデ提案で使う。
-/// - 状態が変わるたびに、要約を [onChanged] で外へ出す(確認タブ用。spec 011)。
-class MvLookupScreen extends StatefulWidget {
-  const MvLookupScreen({
+/// - YouTube の URL または MV 名から、MV のメタ情報(アーティスト名・曲名・リンクなど)を調べる(spec 007)。
+/// - 動画情報が表示されたら、そのアーティストのカルチャー情報も自動で調べる(spec 008)。
+/// - 候補を選ぶと、その候補の直下に情報を展開する(spec 009)。
+/// - ② で、ライブ情報と当日の天気を調べる(spec 009)。
+/// - 取得中は、2 枚のカードのどちらの入力も受け付けない(ロックを共有するため 1 つの State で 2 枚を返す)。
+/// - 状態が変わるたびに、要約を [onChanged] で外へ出す(spec 011)。
+class MvLookupPanel extends StatefulWidget {
+  const MvLookupPanel({
     super.key,
     this.repository,
     this.cultureRepository,
@@ -43,14 +48,14 @@ class MvLookupScreen extends StatefulWidget {
   final LiveRepository? liveRepository;
   final VenueRepository? venueRepository;
 
-  /// 状態が変わったときに呼ばれる(確認タブに渡すため)
+  /// 状態が変わったときに呼ばれる(提案に使う情報を外へ渡すため)
   final ValueChanged<MvLookupSnapshot>? onChanged;
 
   @override
-  State<MvLookupScreen> createState() => _MvLookupScreenState();
+  State<MvLookupPanel> createState() => _MvLookupPanelState();
 }
 
-class _MvLookupScreenState extends State<MvLookupScreen> {
+class _MvLookupPanelState extends State<MvLookupPanel> {
   late final MvRepository _repository = widget.repository ?? MvRepository();
   late final CultureRepository _cultureRepository =
       widget.cultureRepository ?? CultureRepository();
@@ -60,7 +65,7 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
       widget.venueRepository ?? VenueRepository();
   final _controller = TextEditingController();
   bool _loading = false;
-  // 最後に実行した MV の入力(確認タブに出すため)
+  // 最後に実行した MV の入力(提案の結果画面などに出すため)
   String _mvQuery = '';
   // 0 件の表示と初期表示を区別するため
   bool _searched = false;
@@ -93,7 +98,7 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
   /// 表示中の動画のアーティスト(決め方は MvLookupSnapshot.artist)
   String? get _knownArtist => _snapshot().artist;
 
-  /// 状態の要約(確認タブ用)
+  /// 状態の要約
   MvLookupSnapshot _snapshot() {
     final selected = _live?.candidates.where(
       (c) => c.index == _selectedLiveIndex,
@@ -114,7 +119,7 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
     );
   }
 
-  /// 状態を変えるたびに、要約を外へ出す(確認タブに反映するため。spec 011)
+  /// 状態を変えるたびに、要約を外へ出す(spec 011)
   @override
   void setState(VoidCallback fn) {
     super.setState(fn);
@@ -134,6 +139,7 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
       setState(() => _error = '入力が空です。YouTube の URL または MV 名を入力してください');
       return;
     }
+    FocusScope.of(context).unfocus();
     _mvQuery = query;
     await _lookup(query);
   }
@@ -268,9 +274,23 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
     }
   }
 
+  /// ② の候補のタップ。null は「変更」で選択を外した(spec 015)。
+  void _onSelectLive(int? index) {
+    if (index != null) {
+      _selectLive(index);
+      return;
+    }
+    setState(() {
+      _selectedLiveIndex = null;
+      _venueRequest++;
+      _venueFormat = null;
+      _venueLoading = false;
+    });
+  }
+
   /// ライブを選ぶ。選んだライブの会場の形態(spec 014)を裏で調べ始める。
   ///
-  /// 調べている間も他の操作は止めない。結果は確認タブに表示し、コーデ提案にも渡す。
+  /// 調べている間も他の操作は止めない。結果は要約([MvLookupSnapshot])に載せ、コーデ提案に渡す(画面には出さない)。
   Future<void> _selectLive(int index) async {
     if (index == _selectedLiveIndex) return;
     final live = _live?.candidates.where((c) => c.index == index).firstOrNull;
@@ -308,23 +328,18 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
   @override
   Widget build(BuildContext context) {
     final lastLive = _lastLiveQuery;
-    return Scaffold(
-      appBar: AppBar(title: const Text('MV 検索')),
-      body: Column(
-        children: [
-          if (_error != null)
-            MaterialBanner(
-              content: Text(_error!),
-              actions: [
-                TextButton(
-                  onPressed: () => setState(() => _error = null),
-                  child: const Text('閉じる'),
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionCard(
+          step: 1,
+          title: 'MV を選ぶ',
+          children: [
+            const Hint(
+              'YouTube の URL か MV 名で探します。動画を選ぶと、アーティストのカルチャー情報(ファッション・音楽性)を自動で調べます。',
             ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
+            const SizedBox(height: 12),
+            Row(
               children: [
                 Expanded(
                   child: TextField(
@@ -332,52 +347,48 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
                     controller: _controller,
                     // 取得中は他の情報を受け付けない(spec 008 AC-2 / spec 009 AC-14)
                     enabled: !_busy,
+                    textInputAction: TextInputAction.search,
+                    style: const TextStyle(fontSize: 16),
                     decoration: const InputDecoration(
-                      hintText: 'YouTube の URL または MV 名',
-                      border: OutlineInputBorder(),
+                      labelText: 'YouTube の URL または MV 名',
+                      prefixIcon: Icon(Icons.search),
                     ),
                     onSubmitted: (_) => _submit(),
                   ),
                 ),
                 const SizedBox(width: 8),
                 // 通信中は押せなくする(検索は 1 回 100 ユニット消費するため連打させない)
-                IconButton.filled(
+                FilledButton(
+                  key: mvSearchButtonKey,
                   onPressed: _busy ? null : _submit,
-                  icon: const Icon(Icons.search),
-                  tooltip: '調べる',
+                  child: _loading && _expandedVideoId == null
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('検索'),
                 ),
               ],
             ),
-          ),
-          // 候補の動画情報の取得中は、その候補の下に進捗を出す
-          if (_loading && _expandedVideoId == null)
-            const LinearProgressIndicator(),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 12),
-              children: [
-                ..._buildResults(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                  child: LiveSection(
-                    busy: _busy,
-                    loading: _liveLoading,
-                    knownArtist: _knownArtist,
-                    result: _live,
-                    error: _liveError,
-                    selectedIndex: _selectedLiveIndex,
-                    onSearch: _searchLive,
-                    onRetry: lastLive == null
-                        ? () {}
-                        : () => _runLiveSearch(lastLive),
-                    onSelect: _selectLive,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              ErrorText(_error!),
+            ],
+            ..._buildResults(),
+          ],
+        ),
+        LiveSection(
+          busy: _busy,
+          loading: _liveLoading,
+          knownArtist: _knownArtist,
+          result: _live,
+          error: _liveError,
+          selectedIndex: _selectedLiveIndex,
+          onSearch: _searchLive,
+          onRetry: lastLive == null ? () {} : () => _runLiveSearch(lastLive),
+          onSelect: _onSelectLive,
+        ),
+      ],
     );
   }
 
@@ -386,28 +397,28 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
     if (_candidates.isEmpty) {
       // URL を入力した場合は、候補の代わりに動画情報を出す
       if (video != null) {
-        return [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _videoPanel(video),
-          ),
-        ];
+        return [const SizedBox(height: 16), _videoPanel(video)];
+      }
+      if (_loading) {
+        return const [SizedBox(height: 12), Hint('YouTube で探しています')];
       }
       return [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 12),
-          child: Center(
-            child: Text(
-              _searched
-                  ? '該当する動画が見つかりませんでした'
-                  : 'YouTube の URL または MV 名を入力して調べてください',
-            ),
-          ),
+        const SizedBox(height: 12),
+        Hint(
+          _searched
+              ? '該当する動画が見つかりませんでした'
+              : 'YouTube の URL または MV 名を入力して調べてください',
         ),
       ];
     }
 
     return [
+      const SizedBox(height: 16),
+      Text(
+        '見つかった動画(${_candidates.length}件)— 使う MV を選んでください',
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 8),
       for (final candidate in _candidates) ...[
         _CandidateTile(
           candidate: candidate,
@@ -416,7 +427,7 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
         ),
         if (candidate.videoId == _expandedVideoId)
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
             child: video == null
                 ? const LinearProgressIndicator()
                 : _videoPanel(video),
@@ -452,47 +463,46 @@ class _VideoDetail extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final publishedAt = video.publishedAt;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (video.thumbnailUrl.isNotEmpty) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: _Thumbnail(url: video.thumbnailUrl, maxWidth: 480),
-              ),
-              const SizedBox(height: 12),
-            ],
-            Text(video.songTitle, style: theme.textTheme.headlineSmall),
-            Text(video.artist, style: theme.textTheme.titleMedium),
-            if (!video.titleParsed)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'タイトルから分解できなかったため、チャンネル名と動画タイトルをそのまま表示しています',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
-                  ),
-                ),
-              ),
-            const Divider(height: 24),
-            _Field(label: 'リンク', value: video.url),
-            _Field(label: '動画タイトル', value: video.title),
-            _Field(label: 'チャンネル', value: video.channelTitle),
-            if (publishedAt != null)
-              _Field(label: '公開日', value: formatDate(publishedAt)),
-            if (video.description.isNotEmpty)
-              ExpansionTile(
-                title: const Text('概要欄'),
-                tilePadding: EdgeInsets.zero,
-                expandedAlignment: Alignment.centerLeft,
-                children: [SelectableText(video.description)],
-              ),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (video.thumbnailUrl.isNotEmpty) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _Thumbnail(url: video.thumbnailUrl, maxWidth: 480),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Text(
+          video.songTitle,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
-      ),
+        Text(video.artist, style: const TextStyle(color: AppColors.muted)),
+        if (!video.titleParsed)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: ErrorText('タイトルから分解できなかったため、チャンネル名と動画タイトルをそのまま表示しています'),
+          ),
+        const Divider(height: 24, color: AppColors.border),
+        _Field(label: 'リンク', value: video.url),
+        _Field(label: '動画タイトル', value: video.title),
+        _Field(label: 'チャンネル', value: video.channelTitle),
+        if (publishedAt != null)
+          _Field(label: '公開日', value: formatDate(publishedAt)),
+        if (video.description.isNotEmpty)
+          Theme(
+            // 開閉の境界線を出さない
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              title: const Text('概要欄'),
+              tilePadding: EdgeInsets.zero,
+              expandedAlignment: Alignment.centerLeft,
+              children: [SelectableText(video.description)],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -512,7 +522,10 @@ class _Field extends StatelessWidget {
         children: [
           SizedBox(
             width: 96,
-            child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+            child: Text(
+              label,
+              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+            ),
           ),
           // 選択してコピーできるようにする(リンクを後で使うため)
           Expanded(child: SelectableText(value)),
@@ -522,6 +535,7 @@ class _Field extends StatelessWidget {
   }
 }
 
+/// MV の候補(tadasii の候補タイル)。展開中は薄い赤地と赤い枠で示す。
 class _CandidateTile extends StatelessWidget {
   const _CandidateTile({
     required this.candidate,
@@ -537,20 +551,31 @@ class _CandidateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    return InkWell(
-      onTap: onTap,
-      child: Ink(
-        color: expanded ? theme.colorScheme.secondaryContainer : null,
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      color: expanded ? AppColors.selected : AppColors.soft,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: expanded ? AppColors.accent : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.all(10),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: _Thumbnail(url: candidate.thumbnailUrl, maxWidth: 160),
+              SizedBox(
+                width: 112,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: _Thumbnail(url: candidate.thumbnailUrl, maxWidth: 112),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -561,14 +586,23 @@ class _CandidateTile extends StatelessWidget {
                       candidate.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleSmall,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 4),
-                    Text(candidate.channelTitle, style: textTheme.bodySmall),
+                    const SizedBox(height: 2),
+                    Text(
+                      candidate.channelTitle,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.muted,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Icon(expanded ? Icons.expand_more : Icons.chevron_right),
+              const SizedBox(width: 8),
+              expanded
+                  ? const Text('閉じる', style: TextStyle(color: AppColors.accent))
+                  : const Icon(Icons.chevron_right, color: AppColors.muted),
             ],
           ),
         ),
@@ -586,9 +620,9 @@ class _Thumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final placeholder = ColoredBox(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: const Center(child: Icon(Icons.music_video)),
+    const placeholder = ColoredBox(
+      color: AppColors.border,
+      child: Center(child: Icon(Icons.music_video, color: AppColors.muted)),
     );
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),

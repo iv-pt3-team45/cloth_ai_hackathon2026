@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_section.dart';
-import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_screen.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_snapshot.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
@@ -16,8 +16,8 @@ void main() {
     addTearDown(tester.view.reset);
     final snapshots = <MvLookupSnapshot>[];
     await tester.pumpWidget(
-      MaterialApp(
-        home: MvLookupScreen(
+      panelApp(
+        MvLookupPanel(
           repository: FakeMvRepository(
             (query) async =>
                 const MvLookupResult(inputType: 'url', video: confirmVideo),
@@ -34,7 +34,7 @@ void main() {
       find.byKey(mvQueryFieldKey),
       'https://youtu.be/abcDEF12345',
     );
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.search));
+    await tester.tap(find.byKey(mvSearchButtonKey));
     await tester.pumpAndSettle();
 
     expect(snapshots.any((s) => s.cultureLoading), isTrue);
@@ -47,7 +47,7 @@ void main() {
     expect(last.selectedLive, isNull);
 
     await tester.enterText(find.byKey(liveQueryFieldKey), '電光石火');
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.travel_explore));
+    await tester.tap(find.byKey(liveSearchButtonKey));
     await tester.pumpAndSettle();
     await tester.tap(find.text('公演B'));
     await tester.pump();

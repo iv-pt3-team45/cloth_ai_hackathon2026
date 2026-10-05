@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/core/api_client.dart';
-import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_screen.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
-import 'package:tx_hackathon_gc/main.dart';
 
 import 'mv_lookup_fakes.dart';
 
@@ -44,8 +43,8 @@ Future<void> _pumpScreen(WidgetTester tester, FakeMvRepository repo) {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   return tester.pumpWidget(
-    MaterialApp(
-      home: MvLookupScreen(
+    panelApp(
+      MvLookupPanel(
         repository: repo,
         cultureRepository: FakeCultureRepository(),
         liveRepository: FakeLiveRepository(),
@@ -56,7 +55,7 @@ Future<void> _pumpScreen(WidgetTester tester, FakeMvRepository repo) {
 
 Future<void> _submit(WidgetTester tester, String query) async {
   await tester.enterText(find.byKey(mvQueryFieldKey), query);
-  await tester.tap(find.widgetWithIcon(IconButton, Icons.search));
+  await tester.tap(find.byKey(mvSearchButtonKey));
   await tester.pumpAndSettle();
 }
 
@@ -206,7 +205,9 @@ void main() {
     expect(find.text('該当する動画が見つかりませんでした'), findsOneWidget);
   });
 
-  testWidgets('API のエラーは detail をバナーに出す(AC-7, AC-10)', (tester) async {
+  testWidgets('API のエラーは detail を入力欄の下に出し、次の検索で消す(AC-7, AC-10)', (
+    tester,
+  ) async {
     final repo = FakeMvRepository(
       (query) async => throw ApiException(
         '{"detail":"YouTube API のクォータ(1 日の利用上限)を超えました。"}',
@@ -219,10 +220,10 @@ void main() {
 
     expect(find.text('YouTube API のクォータ(1 日の利用上限)を超えました。'), findsOneWidget);
 
-    await tester.tap(find.text('閉じる'));
-    await tester.pumpAndSettle();
+    repo.respond = _videoResult;
+    await _submit(tester, 'https://youtu.be/abcDEF12345');
 
-    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.text('YouTube API のクォータ(1 日の利用上限)を超えました。'), findsNothing);
   });
 
   testWidgets('空のまま実行すると入力エラーを出し、API は呼ばない(AC-8)', (tester) async {
@@ -233,16 +234,5 @@ void main() {
 
     expect(find.textContaining('入力が空です'), findsOneWidget);
     expect(repo.queries, isEmpty);
-  });
-
-  testWidgets('ナビゲーションで MV 検索とチャットを切り替えられる', (tester) async {
-    await tester.pumpWidget(const App());
-
-    expect(find.text('YouTube の URL または MV 名を入力して調べてください'), findsOneWidget);
-
-    await tester.tap(find.text('チャット'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('メッセージを送信してください'), findsOneWidget);
   });
 }

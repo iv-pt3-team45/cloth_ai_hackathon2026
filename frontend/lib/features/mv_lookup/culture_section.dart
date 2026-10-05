@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import 'culture_models.dart';
 import 'grounding_footer.dart';
 
 /// 動画のアーティストのカルチャー情報(spec 008)を表示する。
 ///
-/// 取得の開始と入力のロックは MV 検索画面が行い、ここは状態に応じた表示だけを担う。
+/// 取得の開始と入力のロックは [MvLookupPanel] が行い、ここは状態に応じた表示だけを担う。
+/// 見た目は薄い茶の枠(spec 015)。
 class CultureSection extends StatelessWidget {
   const CultureSection({
     super.key,
@@ -35,9 +38,7 @@ class CultureSection extends StatelessWidget {
     } else {
       child = _Report(report: report);
     }
-    return Card(
-      child: Padding(padding: const EdgeInsets.all(16), child: child),
-    );
+    return SoftBox(child: child);
   }
 }
 
@@ -46,20 +47,16 @@ class _Loading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Row(
+    return const Row(
       children: [
-        const CircularProgressIndicator(),
-        const SizedBox(width: 16),
+        CircularProgressIndicator(),
+        SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('カルチャー情報を調べています', style: textTheme.titleMedium),
-              Text(
-                'Google 検索と MV の映像の解析をしているため、数十秒かかることがあります',
-                style: textTheme.bodySmall,
-              ),
+              Text('カルチャー情報を調べています', style: _bold),
+              Hint('Google 検索と MV の映像の解析をしているため、数十秒かかることがあります'),
             ],
           ),
         ),
@@ -76,15 +73,14 @@ class _Failure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('カルチャー情報を取得できませんでした', style: theme.textTheme.titleMedium),
+        const Text('カルチャー情報を取得できませんでした', style: _bold),
         const SizedBox(height: 4),
-        Text(message, style: TextStyle(color: theme.colorScheme.error)),
+        ErrorText(message),
         const SizedBox(height: 8),
-        FilledButton.tonalIcon(
+        OutlinedButton.icon(
           onPressed: onRetry,
           icon: const Icon(Icons.refresh),
           label: const Text('再試行'),
@@ -104,10 +100,7 @@ class _Unidentified extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'アーティストを特定できませんでした',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        const Text('アーティストを特定できませんでした', style: _bold),
         const SizedBox(height: 4),
         Text(report.message),
         // 検索は実行されているため、出典と検索候補は表示する
@@ -133,8 +126,13 @@ class _Report extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('カルチャー情報', style: Theme.of(context).textTheme.titleLarge),
-        Text('調べたアーティスト: ${report.artist}'),
+        Text(
+          'カルチャー情報',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        Hint('調べたアーティスト: ${report.artist}'),
         _Heading('ファッション・ビジュアル'),
         if (fashion.isEmpty) const Text('情報が見つかりませんでした'),
         _Chips(label: 'スタイル', values: fashion.styles),
@@ -171,7 +169,7 @@ class _Heading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 4),
-      child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+      child: Text(text, style: _bold),
     );
   }
 }
@@ -183,7 +181,10 @@ class _Label extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: Theme.of(context).textTheme.labelLarge);
+    return Text(
+      text,
+      style: const TextStyle(color: AppColors.muted, fontSize: 13),
+    );
   }
 }
 
@@ -200,14 +201,7 @@ class _Chips extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _Label(label),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [for (final v in values) Chip(label: Text(v))],
-          ),
-        ],
+        children: [_Label(label), const SizedBox(height: 4), PillWrap(values)],
       ),
     );
   }
@@ -260,10 +254,7 @@ class _Citations extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (indices.isEmpty) return const SizedBox.shrink();
-    return Text(
-      '出典: ${indices.map((i) => '[$i]').join(' ')}',
-      style: Theme.of(context).textTheme.bodySmall,
-    );
+    return Hint('出典: ${indices.map((i) => '[$i]').join(' ')}');
   }
 }
 
@@ -281,17 +272,19 @@ class _Outfit extends StatelessWidget {
     }
     if (outfit.looks.isEmpty) return const Text('映像から衣装を読み取れませんでした');
 
-    final textTheme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final look in outfit.looks) ...[
           if (look.label.isNotEmpty)
-            Text(look.label, style: textTheme.titleSmall),
+            Text(
+              look.label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           for (final item in look.items) Text('・${_describe(item)}'),
           const SizedBox(height: 4),
         ],
-        Text('根拠: MV の映像', style: textTheme.bodySmall),
+        const Hint('根拠: MV の映像'),
       ],
     );
   }
@@ -309,3 +302,5 @@ class _Outfit extends StatelessWidget {
     return item.notes.isEmpty ? head : '$head ${item.notes}';
   }
 }
+
+const _bold = TextStyle(fontWeight: FontWeight.bold);
