@@ -38,6 +38,7 @@ Future<void> _pumpScreen(
         ),
         cultureRepository: culture ?? FakeCultureRepository(),
         liveRepository: live,
+        venueRepository: FakeVenueRepository(),
       ),
     ),
   );

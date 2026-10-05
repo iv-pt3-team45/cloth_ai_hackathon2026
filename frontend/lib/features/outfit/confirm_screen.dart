@@ -6,6 +6,7 @@ import '../mv_lookup/culture_models.dart';
 import '../mv_lookup/grounding_footer.dart';
 import '../mv_lookup/mv_lookup_snapshot.dart';
 import '../mv_lookup/utils.dart';
+import '../mv_lookup/venue_models.dart';
 import '../wardrobe/wardrobe_models.dart';
 import '../wardrobe/wardrobe_repository.dart';
 import 'outfit_models.dart';
@@ -107,6 +108,8 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         video: video,
         live: live,
         culture: s.culture,
+        // 調べている途中なら送らない(バックエンドが提案の前に調べる)
+        venueFormat: s.venueFormatLoading ? null : s.venueFormat,
       );
       if (!mounted) return;
       setState(() => _suggestion = suggestion);
@@ -342,6 +345,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         Text('場所: ${live.venue.isEmpty ? '不明' : live.venue}$location'),
         Text('日付: ${date == null ? '不明' : formatDate(date)}'),
         Text('天気: ${live.weather.description}'),
+        Text('客席: ${_venueFormatText(s)}'),
         if (result != null)
           GroundingFooter(
             sources: result.sources,
@@ -350,6 +354,12 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
           ),
       ],
     );
+  }
+
+  /// 会場の客席の形態(spec 014)。ライブを選ぶと MV 検索タブが裏で調べる
+  String _venueFormatText(MvLookupSnapshot s) {
+    if (s.venueFormatLoading) return '調べています…';
+    return (s.venueFormat ?? VenueFormat.unknown).label;
   }
 
   Widget _wardrobeStrip() {

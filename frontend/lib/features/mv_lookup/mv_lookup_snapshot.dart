@@ -1,6 +1,7 @@
 import 'culture_models.dart';
 import 'live_models.dart';
 import 'mv_models.dart';
+import 'venue_models.dart';
 
 /// MV 検索タブの状態の要約(spec 011)。
 ///
@@ -15,6 +16,8 @@ class MvLookupSnapshot {
     this.liveDate,
     this.liveResult,
     this.selectedLive,
+    this.venueFormat,
+    this.venueFormatLoading = false,
   });
 
   /// 最後に実行した MV の入力(MV 名または URL)
@@ -34,6 +37,12 @@ class MvLookupSnapshot {
 
   /// ライブの候補から選んだ 1 件
   final LiveCandidate? selectedLive;
+
+  /// 選んだライブの会場の形態(spec 014)。調べる前・調べている間は null
+  final VenueFormat? venueFormat;
+
+  /// 会場の形態を調べている途中か
+  final bool venueFormatLoading;
 
   /// 表示中の動画のアーティスト。カルチャー情報で特定した名前を優先し、
   /// 無ければタイトルを分解できた場合の名前を使う(spec 009)。

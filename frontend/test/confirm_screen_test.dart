@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/core/api_client.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_snapshot.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/confirm_screen.dart';
 import 'package:tx_hackathon_gc/features/outfit/outfit_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/wardrobe_strip.dart';
@@ -194,6 +195,57 @@ void main() {
       ['shirt', 'jeans'],
     ]);
     expect(find.byKey(const ValueKey('outfit-image')), findsOneWidget);
+  });
+
+  testWidgets('ライブ情報欄に客席の形態を出す(spec 014)', (tester) async {
+    final notifier = await _pump(
+      tester,
+      snapshot: fullSnapshot(venueFormatLoading: true),
+    );
+    expect(find.text('客席: 調べています…'), findsOneWidget);
+
+    notifier.value = fullSnapshot(venueFormat: VenueFormat.standing);
+    await tester.pump();
+    expect(find.text('客席: スタンディング(立ち見)'), findsOneWidget);
+
+    notifier.value = fullSnapshot(venueFormat: VenueFormat.mixed);
+    await tester.pump();
+    expect(find.text('客席: スタンディングと着席の両方あり(チケットによって異なる)'), findsOneWidget);
+
+    notifier.value = fullSnapshot();
+    await tester.pump();
+    expect(find.text('客席: 不明'), findsOneWidget);
+  });
+
+  testWidgets('提案のとき、調べ終わった会場の形態を一緒に送る(spec 014)', (tester) async {
+    final outfit = FakeOutfitRepository();
+    await _pump(
+      tester,
+      snapshot: fullSnapshot(venueFormat: VenueFormat.seated),
+      outfit: outfit,
+    );
+
+    await tester.tap(find.text('コーデを提案'));
+    await tester.pumpAndSettle();
+
+    expect(outfit.suggestCalls.single.venueFormat, VenueFormat.seated);
+  });
+
+  testWidgets('会場の形態を調べている途中なら送らない(spec 014)', (tester) async {
+    final outfit = FakeOutfitRepository();
+    await _pump(
+      tester,
+      snapshot: fullSnapshot(
+        venueFormat: VenueFormat.seated,
+        venueFormatLoading: true,
+      ),
+      outfit: outfit,
+    );
+
+    await tester.tap(find.text('コーデを提案'));
+    await tester.pumpAndSettle();
+
+    expect(outfit.suggestCalls.single.venueFormat, isNull);
   });
 
   testWidgets('提案・画像の生成中はローディングを出し、押せない(AC-12)', (tester) async {

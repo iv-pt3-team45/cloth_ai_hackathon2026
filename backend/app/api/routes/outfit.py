@@ -42,7 +42,9 @@ def _to_http(exc: OutfitError) -> HTTPException:
 @router.post("/suggest", response_model=OutfitSuggestion)
 async def suggest(payload: OutfitSuggestRequest, service: Service) -> OutfitSuggestion:
     try:
-        return await service.suggest(payload.video, payload.culture, payload.live)
+        return await service.suggest(
+            payload.video, payload.culture, payload.live, payload.venue_format
+        )
     except OutfitError as exc:
         raise _to_http(exc) from exc
 

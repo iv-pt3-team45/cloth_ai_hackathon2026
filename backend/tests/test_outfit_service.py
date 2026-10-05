@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from app.services.outfit import (
     build_suggest_prompt,
     load_owned,
 )
+from app.services.venue import VenueFormat, VenueInfo
 from app.services.wardrobe_store import LocalWardrobeStore
 from tests.gemini_stub import calls_of
 from tests.outfit_stub import (
@@ -73,7 +75,142 @@ def test_prompt_without_culture_and_weather(tmp_path: Path) -> None:
     assert "予報はまだ出ていない" in prompt
 
 
+def test_prompt_includes_venue_format(tmp_path: Path) -> None:
+    """F14 で調べた会場の形態が「行くライブ」に入る。"""
+    settings = make_settings(tmp_path)
+    register_clothes(settings)
+    owned = load_owned(LocalWardrobeStore(settings.cloth_index_file))
+
+    standing = build_suggest_prompt(owned, make_video(), None, make_live(), VenueFormat.STANDING)
+    seated = build_suggest_prompt(owned, make_video(), None, make_live(), VenueFormat.SEATED)
+
+    mixed = build_suggest_prompt(owned, make_video(), None, make_live(), VenueFormat.MIXED)
+
+    assert "- 会場の形態: スタンディング" in standing
+    assert "- 会場の形態: 着席" in seated
+    assert "- 会場の形態: 混在(" in mixed
+
+
+def test_prompt_omits_unknown_venue_format(tmp_path: Path) -> None:
+    """形態が分からないときは行ごと足さない。"""
+    settings = make_settings(tmp_path)
+    register_clothes(settings)
+    owned = load_owned(LocalWardrobeStore(settings.cloth_index_file))
+
+    for venue_format in (None, VenueFormat.UNKNOWN):
+        prompt = build_suggest_prompt(owned, make_video(), None, make_live(), venue_format)
+        assert "会場の形態" not in prompt
+
+
 # --- 提案 ------------------------------------------------------------------
+
+
+async def test_suggest_uses_venue_format(tmp_path: Path) -> None:
+    """ライブの会場名・所在地・ライブ名・公演日を F14 に渡し、形態をプロンプトに足す。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    received: dict[str, Any] = {}
+
+    def standing(venue_name: str, **kwargs: Any) -> VenueInfo:
+        received.update(venue_name=venue_name, **kwargs)
+        return VenueInfo(venue_name=venue_name, format=VenueFormat.STANDING)
+
+    service, client = make_service(settings, responder(suggestion(ids["Tシャツ"])), standing)
+
+    await service.suggest(make_video(), None, make_live())
+
+    assert received["venue_name"] == "さいたまスーパーアリーナ"
+    assert received["location"] == "埼玉県さいたま市"
+    assert received["live_name"] == "ARENA TOUR"
+    assert received["live_date"] == "2023-06-03"
+    assert "- 会場の形態: スタンディング" in calls_of(client)[0]["contents"]
+
+
+async def test_suggest_uses_given_venue_format_without_lookup(tmp_path: Path) -> None:
+    """画面が調べた形態を送ってきたら、それを使い、もう一度は調べない。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    called: list[str] = []
+
+    def record(venue_name: str, **_: Any) -> VenueInfo:
+        called.append(venue_name)
+        return VenueInfo(venue_name=venue_name, format=VenueFormat.STANDING)
+
+    service, client = make_service(settings, responder(suggestion(ids["Tシャツ"])), record)
+
+    await service.suggest(make_video(), None, make_live(), VenueFormat.SEATED)
+
+    assert called == []
+    assert "- 会場の形態: 着席" in calls_of(client)[0]["contents"]
+
+
+async def test_suggest_does_not_lookup_again_when_given_unknown(tmp_path: Path) -> None:
+    """unknown が送られてきた(画面で調べたが分からなかった)ときも、もう一度は調べない。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    called: list[str] = []
+
+    def record(venue_name: str, **_: Any) -> VenueInfo:
+        called.append(venue_name)
+        return VenueInfo(venue_name=venue_name, format=VenueFormat.STANDING)
+
+    service, client = make_service(settings, responder(suggestion(ids["Tシャツ"])), record)
+
+    await service.suggest(make_video(), None, make_live(), VenueFormat.UNKNOWN)
+
+    assert called == []
+    assert "会場の形態" not in calls_of(client)[0]["contents"]
+
+
+async def test_suggest_continues_when_venue_lookup_fails(tmp_path: Path) -> None:
+    """F14 が失敗しても、形態なしで提案する。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+
+    def failed(venue_name: str, **_: Any) -> VenueInfo:
+        return VenueInfo(venue_name=venue_name, status="error", message="APIエラー")
+
+    service, client = make_service(settings, responder(suggestion(ids["Tシャツ"])), failed)
+
+    result = await service.suggest(make_video(), None, make_live())
+
+    assert [item.category for item in result.items] == ["Tシャツ"]
+    assert "会場の形態" not in calls_of(client)[0]["contents"]
+
+
+async def test_suggest_continues_when_venue_lookup_times_out(tmp_path: Path) -> None:
+    """F14 が時間切れになっても、形態なしで提案する。"""
+    settings = make_settings(tmp_path, venue_info_timeout=0.05)
+    ids = register_clothes(settings)
+
+    def slow(venue_name: str, **_: Any) -> VenueInfo:
+        time.sleep(0.3)
+        return VenueInfo(venue_name=venue_name, format=VenueFormat.STANDING)
+
+    service, client = make_service(settings, responder(suggestion(ids["Tシャツ"])), slow)
+
+    result = await service.suggest(make_video(), None, make_live())
+
+    assert [item.category for item in result.items] == ["Tシャツ"]
+    assert "会場の形態" not in calls_of(client)[0]["contents"]
+
+
+async def test_suggest_skips_venue_lookup_without_venue(tmp_path: Path) -> None:
+    """会場名が無ければ F14 を呼ばない。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    called: list[str] = []
+
+    def record(venue_name: str, **_: Any) -> VenueInfo:
+        called.append(venue_name)
+        return VenueInfo(venue_name=venue_name)
+
+    service, _ = make_service(settings, responder(suggestion(ids["Tシャツ"])), record)
+    live = make_live().model_copy(update={"venue": ""})
+
+    await service.suggest(make_video(), None, live)
+
+    assert called == []
 
 
 async def test_suggest_uses_only_owned_clothes(tmp_path: Path) -> None:

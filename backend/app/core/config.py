@@ -91,6 +91,10 @@ class Settings(BaseSettings):
 
     # --- 会場情報取得(F14) ---
     venue_info_model: str = "gemini-2.5-flash"
+    # コーデ提案(spec 011)の前に会場の形態を調べるときの待ち時間の上限(秒)。
+    # 超えたら形態不明として提案を続ける
+    venue_info_timeout: float = 30.0
+
     # --- 手持ちの服からのコーデ提案(spec 011) ---
     # 提案(文字)に使うモデル。画像の生成は IMAGE_MODEL を使う
     outfit_model: str = "gemini-3.5-flash-lite"
