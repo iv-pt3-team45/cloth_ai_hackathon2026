@@ -42,7 +42,9 @@ def _to_http(exc: OutfitError) -> HTTPException:
 @router.post("/suggest", response_model=OutfitSuggestion)
 async def suggest(payload: OutfitSuggestRequest, service: Service) -> OutfitSuggestion:
     try:
-        return await service.suggest(payload.video, payload.culture, payload.live)
+        return await service.suggest(
+            payload.video, payload.culture, payload.live, payload.venue_format
+        )
     except OutfitError as exc:
         raise _to_http(exc) from exc
 
@@ -50,6 +52,7 @@ async def suggest(payload: OutfitSuggestRequest, service: Service) -> OutfitSugg
 @router.post("/image", response_model=OutfitImageResponse)
 async def image(payload: OutfitImageRequest, service: Service) -> OutfitImageResponse:
     try:
-        return await service.generate_image(payload.item_ids, payload.title)
+        # title は互換のため受け取るが、画像の生成には使わない(spec 011 design.md 6.2)
+        return await service.generate_image(payload.item_ids)
     except OutfitError as exc:
         raise _to_http(exc) from exc

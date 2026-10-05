@@ -10,6 +10,7 @@ import 'package:tx_hackathon_gc/features/mv_lookup/culture_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_section.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/outfit_models.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_models.dart';
 import 'package:tx_hackathon_gc/main.dart';
@@ -30,12 +31,14 @@ class _Fakes {
        ),
        culture = FakeCultureRepository(culture ?? (video) async => fullReport),
        live = FakeLiveRepository(),
+       venue = FakeVenueRepository(),
        wardrobe = FakeWardrobeRepository(items: clothes),
        outfit = outfit ?? FakeOutfitRepository();
 
   final FakeMvRepository mv;
   final FakeCultureRepository culture;
   final FakeLiveRepository live;
+  final FakeVenueRepository venue;
   final FakeWardrobeRepository wardrobe;
   final FakeOutfitRepository outfit;
 }
@@ -55,6 +58,7 @@ Future<void> _pump(
         mvRepository: fakes.mv,
         cultureRepository: fakes.culture,
         liveRepository: fakes.live,
+        venueRepository: fakes.venue,
         wardrobeRepository: fakes.wardrobe,
         photoPicker: FakePhotoPicker([]),
         outfitRepository: fakes.outfit,
@@ -192,6 +196,9 @@ void main() {
     expect(call.video.videoId, confirmVideo.videoId);
     expect(call.live.liveName, '公演A');
     expect(call.culture?.artist, 'YOASOBI');
+    // ライブを選んだときに調べた会場の形態も送る(spec 014)
+    expect(fakes.venue.lives.single.liveName, '公演A');
+    expect(call.venueFormat, VenueFormat.standing);
 
     suggestion.complete(suggestionOf('晴れの日のライブコーデ'));
     await tester.pump();

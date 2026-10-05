@@ -18,6 +18,7 @@ from app.schemas.culture import (
 from app.schemas.live import LiveCandidate, LiveWeather
 from app.services.cloth_index import ClothItem
 from app.services.outfit import OutfitService, _OutfitOutput, _SuggestedItemOutput
+from app.services.venue import VenueFormat, VenueInfo, VenueLookup
 from app.services.wardrobe_store import LocalWardrobeStore
 from tests.gemini_stub import Responder, parsed_response
 from tests.gemini_stub import make_client as _make_client
@@ -148,9 +149,19 @@ def responder(output: _OutfitOutput | None = None, image: Any = None) -> Respond
     return respond
 
 
-def make_service(settings: Settings, respond: Responder) -> tuple[OutfitService, Any]:
+def unknown_venue(venue_name: str, **_: Any) -> VenueInfo:
+    """既定の会場の形態の取得。外部通信はせず、形態不明を返す。"""
+    return VenueInfo(venue_name=venue_name, format=VenueFormat.UNKNOWN)
+
+
+def make_service(
+    settings: Settings, respond: Responder, venue_lookup: VenueLookup = unknown_venue
+) -> tuple[OutfitService, Any]:
     client = _make_client(respond)
     service = OutfitService(
-        settings=settings, store=LocalWardrobeStore(settings.cloth_index_file), client=client
+        settings=settings,
+        store=LocalWardrobeStore(settings.cloth_index_file),
+        client=client,
+        venue_lookup=venue_lookup,
     )
     return service, client

@@ -52,9 +52,13 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 {
   "video": { "...": "spec 007 の VideoInfo" },
   "culture": { "...": "spec 008 の CultureResponse(取得できていなければ null)" },
-  "live": { "...": "spec 009 の LiveCandidate(選んだ 1 件)" }
+  "live": { "...": "spec 009 の LiveCandidate(選んだ 1 件)" },
+  "venue_format": "standing"
 }
 ```
+
+- `venue_format`(任意。2026-10-05 追加): ライブを選んだ時点で調べた会場の形態(spec 014。`standing` / `seated` / `mixed` / `unknown`)。
+  送られてきたら(`unknown` でも)サーバはもう一度調べない。省略したときだけ、提案の前に調べる。
 
 レスポンス (200):
 
@@ -76,7 +80,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 
 ### `POST /api/v1/outfit/image`
 
-リクエスト: `{ "item_ids": ["3f9c0d2e1a7b", "…"], "title": "…" }`(1〜10 件)
+リクエスト: `{ "item_ids": ["3f9c0d2e1a7b", "…"], "title": "…" }`(1〜10 件)。`title` は互換のため受け取るが、画像の生成には使わない(6.2)
 
 レスポンス (200): `{ "mime_type": "image/png", "data": "<base64>", "file_name": "outfit-….png", "model": "gemini-3.1-flash-lite-image" }`
 
@@ -102,7 +106,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 | `OutfitSuggestRequest` | `video: VideoInfo`(007)、`culture: CultureResponse \| None`(008)、`live: LiveCandidate`(009) |
 | `SuggestedCloth` | spec 010 の `RegisteredCloth` + `role`(トップス / ボトムスなど)・`reason` |
 | `OutfitSuggestion` | `title` / `summary` / `points: list[str]` / `items: list[SuggestedCloth]` / `excluded_count` / `model` |
-| `OutfitImageRequest` | `item_ids: list[str]`(1〜10)、`title` |
+| `OutfitImageRequest` | `item_ids: list[str]`(1〜10)、`title`(省略可。使わない) |
 | `OutfitImageResponse` | `mime_type` / `data`(base64)/ `file_name` / `model` |
 
 構造化出力(`app/services/outfit.py` 内のみ): `_OutfitOutput { title, summary, points, items: [{ id, role, reason }] }`。
@@ -132,7 +136,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 | MV 情報 | サムネイル・曲名・アーティスト名・リンク | 同上 |
 | アーティスト情報 | カルチャー情報で特定した名前(無ければ動画の名前)と概要 | 「カルチャー情報を取得中です」など |
 | カルチャー情報 | ファッション・ビジュアル(スタイル・色・アイテム・世界観)、この MV の衣装、音楽ジャンル | 同上 |
-| ライブ情報 | 選んだライブのライブ名・場所・日付・天気 | 「まだありません(MV 検索タブの「ライブを探す」で選んでください)」 |
+| ライブ情報 | 選んだライブのライブ名・場所・日付・天気・客席(spec 014。「客席: スタンディング(立ち見)」「着席(座席あり)」「スタンディングと着席の両方あり(チケットによって異なる)」「不明」、調べている間は「調べています…」) | 「まだありません(MV 検索タブの「ライブを探す」で選んでください)」 |
 | 手持ちの服 | 小さな写真の横並び(5.3) | 「まだありません(手持ちの服タブで登録してください)」 |
 | コーデ提案 | ボタン・足りないもの・提案・画像(5.4) | — |
 
@@ -177,11 +181,15 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 
 - 役割: プロのスタイリスト。
 - 入力(テキスト): 手持ちの服の一覧(`id` と属性すべて)、MV(曲名・アーティスト・動画タイトル)、
-  カルチャー情報(ファッション・ビジュアル、この MV の衣装、音楽ジャンル、概要)、ライブ(ライブ名・会場・所在地・日付)、天気(実績 / 予報・概況・気温・降水確率。無ければ「不明」)。
+  カルチャー情報(ファッション・ビジュアル、この MV の衣装、音楽ジャンル、概要)、ライブ(ライブ名・会場・所在地・日付)、天気(実績 / 予報・概況・気温・降水確率。無ければ「不明」)、会場の形態(スタンディング / 着席。分からなければ行ごと書かない)。
+- 会場の形態(2026-10-02 追加、2026-10-05 更新): 画面が `venue_format` を送ってきたらそれを使う。送られてこなかったときだけ、提案の呼び出しの前に spec 014 の `lookup_venue_info` でライブの会場名・所在地・ライブ名・公演日を渡して調べる。
+  `get_venue_info` は同期関数なので `asyncio.to_thread` で別スレッドで動かす(イベントループを止めないため)。
+  待ち時間の上限は `venue_info_timeout`(既定 30 秒)。失敗・時間切れ・形態不明のときは形態なしで提案を続ける(提案全体は止めない)。
 - 指示:
   - 使う服は手持ちの一覧にある服だけ。`id` で指定する。一覧に無い服(買い足す服・小物)は出さない。
   - トップスとボトムス(またはワンピース)を基本に、必要なら上着・靴・小物を手持ちから足す。同じ役割の服を重ねない。
   - 天気・気温と、服の季節・暖かさを合わせる。会場が屋内か屋外かも考える。
+  - 会場の形態が書かれていれば合わせる(スタンディングなら動きやすさ・歩きやすい靴・荷物になる厚手の上着を避ける、着席なら座っても窮屈でない服・後ろの視界をさえぎる大きな帽子を避ける、混在なら立っても座っても困らない脱ぎ着しやすい服)。
   - アーティストのファッションの傾向や MV の衣装の雰囲気を取り入れ、ライブの場面(使う場面「ライブ・フェス」を優先)に合わせる。
   - 理由は具体的に書く。
 - `response_schema=_OutfitOutput`・`temperature` は 0.7(提案に幅を持たせる)。
@@ -191,9 +199,17 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 - 入力: **1 枚目にマネキン画像**、続けて**提案に使う服の写真**(同じ写真は 1 回だけ)、最後に指示文。
 - 指示文は写真の番号と、その写真のどの服を使うか(種類と色だけ。1 枚の写真に複数の服が写っていることがあるため)を伝える。
   服の見た目は**写真から再現させる**(属性の文字から作らせない)。
+  **コーデ名は入れない**(下の検証で、ロゴ入りの服とライブ名を含むコーデ名が重なると画像が返らなかったため。2026-10-05)。
 - 指示: マネキンに指定の服をそのまま着せる。写真の色・柄・形・プリントを忠実に再現する。写真に無い服や小物を足さない。
   マネキンの姿勢・台・背景・画角はそのまま保つ。
-- `response_modalities=["TEXT", "IMAGE"]`(spec 003 の画像生成と同じ)。応答の最初の画像を使う。
+- `response_modalities=["IMAGE"]`(**テキストの出力は許さない**)。応答の最初の画像を使う。
+  当初は spec 003 と同じ `["TEXT", "IMAGE"]` だったが、正常終了(`finish_reason=STOP`)なのに空のテキストだけが返り、
+  画像が無いことが度々あったため変更した(2026-10-02)。
+  ただし同日の検証(ピンクのロゴ T シャツ + デニムの同じ入力で各 5 回)では、`["TEXT", "IMAGE"]` は 5 回とも `STOP` で空のテキスト、
+  `["IMAGE"]` は 5 回とも `NO_IMAGE` で、どちらも画像は 0 / 5 だった。変更で失敗の理由が見分けやすくなったが、
+  原因の切り分け(2026-10-05、画像のみ・各 2 回): ロゴ T シャツだけ + コーデ名あり 0 / 2、白 T シャツ + デニム + コーデ名あり 2 / 2、
+  ロゴ T シャツ + デニム + **コーデ名なし 2 / 2**。ライブ名(「電光石火」)を含むコーデ名とロゴ入りの服が重なると、
+  モデルが画像を出さないとみられる(件数は少ない)。画像にはコーデ名が要らないため、指示文から外した。
 
 ### 6.3 設定
 
@@ -202,6 +218,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 | `outfit_model` | `gemini-3.5-flash-lite` | 提案に使うモデル(未決事項 1 の決定: `GEMINI_MODEL` とは別に設ける) |
 | `outfit_timeout` | `120` | 提案の待ち時間の上限(秒) |
 | `outfit_mannequin_path` | `app/assets/white_manekin.jpeg` | マネキン画像(backend/ からの相対) |
+| `venue_info_timeout` | `30` | 提案の前に会場の形態(spec 014)を調べる待ち時間の上限(秒)。超えたら形態なしで提案する |
 | `image_model` / `media_generation_timeout` | (既存) | 画像の生成に使うモデルと、待ち時間の上限 |
 
 ## 7. エラーハンドリング / 非機能
@@ -217,7 +234,8 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 
 | 層 | 対象 | 手段 |
 | --- | --- | --- |
-| backend unit | プロンプトの組み立て | 手持ちの服の id と属性・MV・カルチャー・ライブ・天気(不明を含む)が入る |
+| backend unit | プロンプトの組み立て | 手持ちの服の id と属性・MV・カルチャー・ライブ・天気(不明を含む)が入る。会場の形態が入る / 不明なら入らない |
+| backend unit | 会場の形態 | ライブの情報を F14 に渡す、失敗・時間切れでも提案する、会場名が無ければ呼ばない |
 | backend unit | 提案 | フェイクのクライアントで: 手持ちに無い id の除外と件数、重複の除外、手持ち 0 件、1 点も使えない、解釈できない、クォータ、タイムアウト |
 | backend unit | 画像 | マネキンが 1 枚目・同じ写真は 1 回・指示文に写真の番号と服、画像の取り出しと保存、手持ちに無い id、マネキンが無い、画像が返らない |
 | backend api | ルータ | 200 / 400 / 422 / 502 / 503 / 504 |

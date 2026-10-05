@@ -6,6 +6,8 @@ import 'package:tx_hackathon_gc/features/mv_lookup/live_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_repository.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_repository.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/venue_repository.dart';
 
 /// ライブ情報の検索条件(フェイクが受け取った値)。
 typedef LiveRequest = ({String query, DateTime? date, String? artist});
@@ -180,3 +182,19 @@ Widget panelApp(Widget panel) => MaterialApp(
     ),
   ),
 );
+
+/// Gemini(バックエンド)を呼ばない会場の形態のリポジトリ(spec 014)。受け取ったライブを記録する。
+class FakeVenueRepository implements VenueRepository {
+  FakeVenueRepository([this.respond = _standing]);
+
+  final Future<VenueFormat> Function(LiveCandidate live) respond;
+  final lives = <LiveCandidate>[];
+
+  @override
+  Future<VenueFormat> lookup(LiveCandidate live) {
+    lives.add(live);
+    return respond(live);
+  }
+}
+
+Future<VenueFormat> _standing(LiveCandidate live) async => VenueFormat.standing;

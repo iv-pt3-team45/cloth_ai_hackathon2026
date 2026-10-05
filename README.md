@@ -1,3 +1,26 @@
+よく使うgitのコマンド
+# 一番最初にやること
+	git clone https://~~~~~~~~~
+
+# main へ切り替えて最新化するコマンドです。
+	git checkout main
+	git pull origin main
+
+# 新しいブランチを作成
+	git checkout -b feature/〇〇
+# 作業をステージング/コミット
+	git add <<対象フォルダ（スペースで区切って複数可能）>>
+	git commit -m "コメント"
+# PR作成
+	git push -u origin feature/〇〇
+	git push -u origin(gituhub) {どのブランチをアップロード}
+	
+# main を最新化するコマンドです（PowerShell）。
+	git checkout main
+	git pull origin main
+	
+
+
 # tx_hackathon_gc
 
 Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を組み合わせたアプリケーション。
@@ -255,6 +278,8 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `OUTFIT_MODEL` | `gemini-3.5-flash-lite` | コーデ提案(4.12)で、手持ちの服から組み合わせを選ぶモデル。画像の生成は `IMAGE_MODEL` |
 | `OUTFIT_TIMEOUT` | `120.0` | コーデ提案(文字)の待ち時間上限(秒) |
 | `OUTFIT_MANNEQUIN_PATH` | `app/assets/white_manekin.jpeg` | 服を着せるマネキン画像(backend/ からの相対) |
+| `VENUE_INFO_MODEL` | `gemini-2.5-flash` | 会場の形態(スタンディング / 着席 / 混在)を Google 検索で調べるモデル(spec 014) |
+| `VENUE_INFO_TIMEOUT` | `30.0` | 会場の形態を調べる待ち時間の上限(秒)。超えたら「不明」として進める |
 
 ### 3.3 Google Cloud 認証(ADC)
 
@@ -771,7 +796,7 @@ Web アプリは**下部のタブが無い 1 画面**で、上部の段階表示
 - 押すと次の 2 段階で進む。
   1. **提案**(`OUTFIT_MODEL`): 手持ちの服のインデックス・MV・アーティスト・カルチャー・ライブ・天気をまとめて Gemini に渡し、
      手持ちの服から 1 コーデを選ばせる。Google 検索は使わない。**手持ちに無い服(ID)を返しても、サーバ側で取り除く**(除いた点数を画面に出す)。
-  2. **画像**(`IMAGE_MODEL` = Nano Banana 2 Flash Lite): マネキン画像(`OUTFIT_MANNEQUIN_PATH`)と、提案の服が写った**登録した写真そのもの**を渡し、
+  2. **画像**(`IMAGE_MODEL` = Nano Banana 2 Flash Lite。**画像だけを返させ、テキストの出力は許さない**): マネキン画像(`OUTFIT_MANNEQUIN_PATH`)と、提案の服が写った**登録した写真そのもの**を渡し、
      マネキンに着せた画像を 1 枚作る。1 枚の写真に複数の服が写っていれば、どの服を使うかを指示文で伝える。
      画像は `backend/app/created_images/outfit-*` にも残る(Git 管理外。4.4 と同じ)。
 - 提案が失敗したら入力の段階に戻り、上部に理由が出る。もう一度押せばやり直す。
@@ -780,6 +805,7 @@ Web アプリは**下部のタブが無い 1 画面**で、上部の段階表示
 - 「条件を変えてもう一度」で入力の段階に戻る(入力は残る)。もう一度提案すると前の結果は置き換わる(履歴は残さない)。
 - 出典の「参照した情報源:」のリンクはタップで開ける。Google の検索候補は必ず添える(4.9)。
 - 所要時間の目安は、提案が数秒〜十数秒、画像が十数秒〜数十秒。
+- **会場の形態**(spec 014): ② でライブを選ぶと、その会場がスタンディングか着席か(両方あれば「混在」)を Gemini + Google 検索で裏で調べ(`VENUE_INFO_MODEL`、数秒〜十数秒)、提案のときに一緒に送る。画面には出さない(表示していた確認タブを spec 015 で外したため)。調べている途中で提案した場合はサーバが提案の前に調べる。分からなければ「不明」で、形態なしで提案する。
 - **チャット(エージェント)は画面からは開かない**(spec 015 で外した)。エージェントは CLI(4.3)から使える。
 
 API から直接呼ぶ場合:
@@ -787,14 +813,18 @@ API から直接呼ぶ場合:
 ```bash
 # 提案(video / live は MV 検索・ライブ検索の応答をそのまま渡す。culture は省略可)
 curl -s -X POST http://localhost:8000/api/v1/outfit/suggest -H "Content-Type: application/json" \
-  -d '{"video": {...}, "culture": {...}, "live": {...}}'
+  -d '{"video": {...}, "culture": {...}, "live": {...}, "venue_format": "standing"}'
 
-# 画像(item_ids は提案の items の id。手持ちに無い ID は 400)
+# 会場の形態(venue 以外は任意。失敗しても 200 で format は unknown)
+curl -s -X POST http://localhost:8000/api/v1/venue/lookup -H "Content-Type: application/json" \
+  -d '{"venue": "さいたまスーパーアリーナ", "location": "埼玉県さいたま市", "live_name": "ARENA TOUR", "date": "2023-06-04"}'
+
+# 画像(item_ids は提案の items の id。手持ちに無い ID は 400。title は送っても使わない)
 curl -s -X POST http://localhost:8000/api/v1/outfit/image -H "Content-Type: application/json" \
-  -d '{"item_ids": ["<id>", "<id>"], "title": "晴れの日のライブコーデ"}'
+  -d '{"item_ids": ["<id>", "<id>"]}'
 ```
 
-応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. を参照。
+応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. (会場の形態は [docs/spec/014-venue-info/design.md](docs/spec/014-venue-info/design.md) の 3.)を参照。
 
 ---
 
@@ -906,7 +936,7 @@ docs/spec/001-user-authentication/
 | [009-live-info-search](docs/spec/009-live-info-search/) | ライブ情報(ライブ名・場所・日付・当日の天気)の検索と、MV 候補のその場での展開 | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
 | [010-wardrobe-registration](docs/spec/010-wardrobe-registration/) | 手持ちの服の写真を登録(Gemini で属性を抽出して保存)・一覧・削除 | done |
 | [011-outfit-suggestion](docs/spec/011-outfit-suggestion/) | 手持ちの服からのコーデ提案(マネキンに着せた画像の生成)。確認タブは 015 で置き換え | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
-| [014-venue-info](docs/spec/014-venue-info/) | 会場情報(会場の形態・位置情報)の取得(F14) | 実装完了(tasks 10 / 10)/ spec のステータスは draft のまま |
+| [014-venue-info](docs/spec/014-venue-info/) | 会場の形態(スタンディング / 着席 / 混在)の取得とコーデ提案への連携(F14) | 実装中(tasks 17 / 18。T-13 の疎通確認が残り)/ 客席の表示は spec 015 の画面には無い |
 | [015-ui-redesign](docs/spec/015-ui-redesign/) | 画面の作り直し(参考 UI `tadasii/` に合わせた 1 画面の流れ。機能は変えない) | 実装完了(ブラウザで確認済み)/ ユーザーの確認待ち |
 
 ---
@@ -1124,7 +1154,7 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | 写真が `対応していない形式です` になる | jpg / png / webp のみ対応。iPhone の HEIC は「設定 → カメラ → フォーマット → 互換性優先」で JPEG にする |
 | 「コーディネートを提案してもらう」を押しても始まらない | 画面上部の「入力内容を確認してください」を見る。① で MV の表示・② で候補の選択・③ で手持ちの服 1 点以上が必要。カルチャー情報の取得中も始まらない |
 | コーデ画像が `マネキン画像が見つかりません`(502) | `backend/app/assets/white_manekin.jpeg` が無い(未コミット・未取得など)か、`OUTFIT_MANNEQUIN_PATH` の誤り。パスは backend/ からの相対 |
-| コーデ画像が `モデルが画像を返しませんでした`(502) | 同じ入力でも時々画像が返らないことがある。「画像を作り直す」で再試行する。続く場合はバックエンドのログの `finish_reason`(安全フィルタなど)を見て、`IMAGE_MODEL` が画像の入力と出力に対応しているか確認する |
+| コーデ画像が `モデルが画像を返しませんでした`(502) | 応答は正常(200)だが画像が入っていなかった。以前はテキストの出力も許していたため空のテキストだけが返ることがあり、今は画像だけを返させている(`response_modalities=["IMAGE"]`)ため、モデルが画像を出さないとログに `finish_reason=NO_IMAGE` が出る。ライブ名を含むコーデ名とロゴ入りの服が重なると続くことがあったため、画像の指示文にはコーデ名を入れていない(spec 011 design.md 6.2)。「条件を変えてもう一度」→「コーディネートを提案してもらう」で別の組み合わせを作り直す。`finish_reason` が `SAFETY` などなら入力の写真を見直し、`IMAGE_MODEL` が画像の入力と出力に対応しているか確認する |
 | コーデ提案が `手持ちの服からコーデを作れませんでした`(502) | Gemini が手持ちに無い服だけを返した(サーバ側で取り除いた結果 0 点)。もう一度押す。服の登録が少ない場合は増やす |
 | コーデ提案 / 画像が `Gemini のクォータ…`(503)/ `… 秒以内に終わりませんでした`(504) | 時間をおく、`OUTFIT_MODEL`(提案)・`IMAGE_MODEL`(画像)を変える、`OUTFIT_TIMEOUT` / `MEDIA_GENERATION_TIMEOUT` を延ばす |
 | 検索候補が文字(検索クエリ)で表示される | Web 以外で実行している。検索候補の HTML は Web でのみ描画する(4.9) |

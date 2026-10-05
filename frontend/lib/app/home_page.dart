@@ -7,6 +7,7 @@ import '../features/mv_lookup/live_repository.dart';
 import '../features/mv_lookup/mv_lookup_panel.dart';
 import '../features/mv_lookup/mv_lookup_snapshot.dart';
 import '../features/mv_lookup/mv_repository.dart';
+import '../features/mv_lookup/venue_repository.dart';
 import '../features/outfit/outfit_controller.dart';
 import '../features/outfit/outfit_progress_view.dart';
 import '../features/outfit/outfit_repository.dart';
@@ -40,6 +41,7 @@ class HomePage extends StatefulWidget {
     this.mvRepository,
     this.cultureRepository,
     this.liveRepository,
+    this.venueRepository,
     this.wardrobeRepository,
     this.photoPicker,
     this.outfitRepository,
@@ -49,6 +51,7 @@ class HomePage extends StatefulWidget {
   final MvRepository? mvRepository;
   final CultureRepository? cultureRepository;
   final LiveRepository? liveRepository;
+  final VenueRepository? venueRepository;
   final WardrobeRepository? wardrobeRepository;
   final PhotoPicker? photoPicker;
   final OutfitRepository? outfitRepository;
@@ -138,7 +141,13 @@ class _HomePageState extends State<HomePage> {
 
     final run = ++_run;
     _setPhase(Phase.running);
-    await _outfit.run(video: video, live: live, culture: _snapshot.culture);
+    await _outfit.run(
+      video: video,
+      live: live,
+      culture: _snapshot.culture,
+      // 会場の形態(spec 014)。調べている途中なら送らない(バックエンドが提案の前に調べる)
+      venueFormat: _snapshot.venueFormatLoading ? null : _snapshot.venueFormat,
+    );
     if (!mounted || run != _run) return;
     if (_outfit.suggestion == null) {
       // 提案の失敗。理由は上部の枠に出す(spec 015 AC-13)
@@ -236,6 +245,7 @@ class _HomePageState extends State<HomePage> {
                           repository: widget.mvRepository,
                           cultureRepository: widget.cultureRepository,
                           liveRepository: widget.liveRepository,
+                          venueRepository: widget.venueRepository,
                           onChanged: (s) => setState(() => _snapshot = s),
                         ),
                         WardrobeSection(

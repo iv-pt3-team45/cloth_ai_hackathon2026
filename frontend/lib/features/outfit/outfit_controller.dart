@@ -4,6 +4,7 @@ import '../../core/api_client.dart';
 import '../mv_lookup/culture_models.dart';
 import '../mv_lookup/live_models.dart';
 import '../mv_lookup/mv_models.dart';
+import '../mv_lookup/venue_models.dart';
 import 'outfit_models.dart';
 import 'outfit_repository.dart';
 
@@ -72,6 +73,7 @@ class OutfitController extends ChangeNotifier {
     required MvVideo video,
     required LiveCandidate live,
     CultureReport? culture,
+    VenueFormat? venueFormat,
   }) async {
     final generation = ++_generation;
     _stage = OutfitStage.suggesting;
@@ -89,6 +91,7 @@ class OutfitController extends ChangeNotifier {
         video: video,
         live: live,
         culture: culture,
+        venueFormat: venueFormat,
       );
     } on ApiException catch (e) {
       _fail(generation, e.detail);
