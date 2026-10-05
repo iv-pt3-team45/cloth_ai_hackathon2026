@@ -1,71 +1,9 @@
 {
-  "generated_at": "2026-10-02T06:25:06+00:00",
-  "model": "gemini-2.5-flash",
+  "generated_at": "2026-10-05T06:40:53+00:00",
+  "model": "gemini-3.5-flash-lite",
   "source_dir": "app",
-  "count": 9,
+  "count": 13,
   "entries": [
-    {
-      "image": "cloth-20260930-085051-3f653a.jpg",
-      "items": [
-        {
-          "category": "シャツ",
-          "material": "綿",
-          "shape": "長袖襟付きシャツ",
-          "colors": [
-            "赤",
-            "黒",
-            "青"
-          ],
-          "pattern": "チェック",
-          "style": "カジュアル",
-          "notes": "バッファローチェック柄、胸ポケットが2つ",
-          "seasons": [
-            "秋",
-            "冬"
-          ],
-          "warmth": "普通",
-          "occasions": [
-            "普段着",
-            "スポーツ・アウトドア"
-          ],
-          "id": "815b5f4a6b9f"
-        }
-      ],
-      "summary": "赤と黒を基調としたチェック柄の長袖シャツが写っています。",
-      "model": "gemini-2.5-flash",
-      "analyzed_at": "2026-09-30T08:50:51+00:00"
-    },
-    {
-      "image": "cloth-20260930-085051-2cf2f6.jpg",
-      "items": [
-        {
-          "category": "パンツ",
-          "material": "綿",
-          "shape": "長ズボン",
-          "colors": [
-            "ベージュ"
-          ],
-          "pattern": "無地",
-          "style": "カジュアル",
-          "notes": "フロントボタンとジッパーフライ、サイドポケットが付いた一般的なチノパンツ",
-          "seasons": [
-            "春",
-            "夏",
-            "秋",
-            "冬"
-          ],
-          "warmth": "普通",
-          "occasions": [
-            "普段着",
-            "きれいめ"
-          ],
-          "id": "839ecbf83d95"
-        }
-      ],
-      "summary": "ベージュのチノパンツが折り畳まれた状態で写っている画像です。",
-      "model": "gemini-2.5-flash",
-      "analyzed_at": "2026-09-30T08:50:51+00:00"
-    },
     {
       "image": "cloth-20260930-085051-e3d7ae.jpg",
       "items": [
@@ -347,6 +285,189 @@
       "summary": "グレーのパーカー、黒いワイドパンツ、黒いトートバッグ、白いスニーカーが平置きされたコーディネート。",
       "model": "gemini-2.5-flash",
       "analyzed_at": "2026-10-02T06:25:06+00:00"
+    },
+    {
+      "image": "cloth-20261005-063750-67e485.jpg",
+      "items": [
+        {
+          "category": "ショルダーバッグ",
+          "material": "ナイロン",
+          "shape": "スクエア型",
+          "colors": [
+            "黒"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "フロントにファスナーポケットとDカン付き",
+          "seasons": [
+            "春",
+            "夏",
+            "秋",
+            "冬"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "スポーツ・アウトドア",
+            "ライブ・フェス"
+          ],
+          "id": "97433a494c8f"
+        }
+      ],
+      "summary": "黒いスクエア型のナイロン製ショルダーバッグが白いテーブルの上に置いてあります。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-05T06:37:50+00:00"
+    },
+    {
+      "image": "cloth-20261005-064053-771499.jpg",
+      "items": [
+        {
+          "category": "長袖Tシャツ",
+          "material": "綿",
+          "shape": "長袖クルーネック",
+          "colors": [
+            "パープル",
+            "ホワイト"
+          ],
+          "pattern": "プリント",
+          "style": "ストリート",
+          "notes": "フロントに「髑髏」「パンク」「東京」の文字とドクロのイラストがプリントされている",
+          "seasons": [
+            "春",
+            "秋"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "ライブ・フェス"
+          ],
+          "id": "1b844f6f892c"
+        }
+      ],
+      "summary": "床に置かれたパープルの長袖Tシャツの画像です。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-05T06:40:53+00:00"
+    },
+    {
+      "image": "cloth-20261005-064053-c62ea2.jpg",
+      "items": [
+        {
+          "category": "パンツ",
+          "material": "デニム",
+          "shape": "ストレート",
+          "colors": [
+            "ブルー",
+            "インディゴ"
+          ],
+          "pattern": "色落ち",
+          "style": "カジュアル",
+          "notes": "ボタンフライ、ヒゲやアタリのある色落ち加工が施されているデニムパンツ",
+          "seasons": [
+            "春",
+            "夏",
+            "秋",
+            "冬"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着"
+          ],
+          "id": "5733530986c0"
+        }
+      ],
+      "summary": "床に置かれた色落ち加工のあるインディゴデニムパンツの画像です。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-05T06:40:53+00:00"
+    },
+    {
+      "image": "cloth-20261005-064053-203cd6.jpg",
+      "items": [
+        {
+          "category": "Tシャツ",
+          "material": "綿",
+          "shape": "半袖クルーネック",
+          "colors": [
+            "ピンク",
+            "黄",
+            "赤"
+          ],
+          "pattern": "プリント",
+          "style": "カジュアル",
+          "notes": "胸元に「Let's Eat」と書かれた円形のロゴプリントがある",
+          "seasons": [
+            "春",
+            "夏"
+          ],
+          "warmth": "薄手",
+          "occasions": [
+            "普段着",
+            "ライブ・フェス"
+          ],
+          "id": "26d5889971c6"
+        }
+      ],
+      "summary": "床にピンクの半袖Tシャツが1枚置かれている。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-05T06:40:53+00:00"
+    },
+    {
+      "image": "cloth-20261005-064053-22492d.jpg",
+      "items": [
+        {
+          "category": "長袖シャツ",
+          "material": "綿",
+          "shape": "ボタンダウン長袖シャツ",
+          "colors": [
+            "ネイビー"
+          ],
+          "pattern": "無地",
+          "style": "きれいめ",
+          "notes": "ボタンダウン仕様、前面ボタン留め",
+          "seasons": [
+            "春",
+            "秋",
+            "冬"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "きれいめ"
+          ],
+          "id": "4dd70fe659b2"
+        }
+      ],
+      "summary": "木製の床の上にきれいに畳んで置かれたネイビーの長袖ボタンダウンシャツの写真。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-05T06:40:53+00:00"
+    },
+    {
+      "image": "cloth-20261005-064053-c0842c.jpg",
+      "items": [
+        {
+          "category": "Tシャツ",
+          "material": "綿",
+          "shape": "半袖クルーネック",
+          "colors": [
+            "白"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "シンプルな無地の白Tシャツ",
+          "seasons": [
+            "春",
+            "夏"
+          ],
+          "warmth": "薄手",
+          "occasions": [
+            "普段着",
+            "スポーツ・アウトドア"
+          ],
+          "id": "7868c36da16a"
+        }
+      ],
+      "summary": "フローリングの床に置かれた白い無地の半袖Tシャツ",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-05T06:40:53+00:00"
     }
   ]
 }

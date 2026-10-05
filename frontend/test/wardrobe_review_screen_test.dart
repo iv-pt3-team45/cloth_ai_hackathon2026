@@ -5,11 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/core/api_client.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/photo_picker.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_models.dart';
-import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_screen.dart';
+import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_section.dart';
 
 import 'wardrobe_fakes.dart';
 
-/// 一覧画面から「写真を追加」して確認画面を開く。
+/// ③ のカードから「写真を選ぶ」で確認画面を開く。
 Future<void> _openReview(
   WidgetTester tester,
   FakeWardrobeRepository repo,
@@ -21,11 +21,18 @@ Future<void> _openReview(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
-      home: WardrobeScreen(repository: repo, picker: FakePhotoPicker(photos)),
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: WardrobeSection(
+            repository: repo,
+            picker: FakePhotoPicker(photos),
+          ),
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.text('写真を追加'));
+  await tester.tap(find.text('写真を選ぶ'));
   // 解析中はプログレスが回り続けるため pumpAndSettle は使わない
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 500));
@@ -106,8 +113,8 @@ void main() {
     expect(saved.seasons, ['春', '夏', '冬']);
     expect(saved.warmth, '厚手');
     expect(saved.occasions, ['普段着', 'ライブ・フェス']);
-    // 一覧に戻り、保存した服が出る
-    expect(find.text('写真を追加'), findsOneWidget);
+    // ③ のカードに戻り、保存した服が出る
+    expect(find.text('写真を選ぶ'), findsOneWidget);
     expect(find.text('ロングTシャツ'), findsOneWidget);
   });
 
@@ -131,7 +138,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.registered, isEmpty);
-    expect(find.text('写真を追加'), findsOneWidget);
+    expect(find.text('写真を選ぶ'), findsOneWidget);
     expect(find.textContaining('まだ服が登録されていません'), findsOneWidget);
   });
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import 'grounding_footer.dart';
 import 'live_models.dart';
 import 'utils.dart';
@@ -7,9 +9,15 @@ import 'utils.dart';
 /// ライブ情報の入力欄(テストで入力欄を区別するため)。
 const liveQueryFieldKey = ValueKey('live-query');
 
-/// ライブ情報の検索(spec 009)。入力欄と、最大 3 件の候補を表示する。
+/// ライブの「検索」ボタン。
+const liveSearchButtonKey = ValueKey('live-search');
+
+/// 詳細検索の「公演日」の欄。
+const liveDateFieldKey = ValueKey('live-date');
+
+/// 「② 行くライブを検索」のカード(spec 009。見た目は spec 015)。入力欄と、最大 3 件の候補を表示する。
 ///
-/// 検索の実行・入力のロック・選択の状態は MV 検索画面が持ち、ここは入力と表示だけを担う。
+/// 検索の実行・入力のロック・選択の状態は [MvLookupPanel] が持ち、ここは入力と表示だけを担う。
 class LiveSection extends StatefulWidget {
   const LiveSection({
     super.key,
@@ -24,7 +32,7 @@ class LiveSection extends StatefulWidget {
     this.selectedIndex,
   });
 
-  /// MV 検索画面のどこかで取得中。この間は入力を受け付けない
+  /// ① ② のどこかで取得中。この間は入力を受け付けない
   final bool busy;
 
   /// ライブ情報を取得中
@@ -39,7 +47,9 @@ class LiveSection extends StatefulWidget {
   final int? selectedIndex;
   final void Function(String query, DateTime? date) onSearch;
   final VoidCallback onRetry;
-  final ValueChanged<int> onSelect;
+
+  /// 候補を選んだ(null は選び直すために選択を外した)
+  final ValueChanged<int?> onSelect;
 
   @override
   State<LiveSection> createState() => _LiveSectionState();
@@ -47,12 +57,17 @@ class LiveSection extends StatefulWidget {
 
 class _LiveSectionState extends State<LiveSection> {
   final _controller = TextEditingController();
+  final _dateText = TextEditingController();
   DateTime? _date;
   String? _inputError;
+
+  /// 詳細検索を開いているか(最初は閉じておく)
+  bool _showDetails = false;
 
   @override
   void dispose() {
     _controller.dispose();
+    _dateText.dispose();
     super.dispose();
   }
 
@@ -60,15 +75,28 @@ class _LiveSectionState extends State<LiveSection> {
     if (widget.busy) return;
     final query = _controller.text.trim();
     if (query.isEmpty && _date == null) {
-      // 両方空なら API を呼ばない(AC-6)
+      // 両方空なら API を呼ばない(spec 009 AC-6)
       setState(() => _inputError = 'ライブ情報か日付を入力してください');
       return;
     }
-    setState(() => _inputError = null);
+    FocusScope.of(context).unfocus();
+    // 結果が検索欄のすぐ下に見えるよう、詳細検索は閉じる(条件は残る)
+    setState(() {
+      _inputError = null;
+      _showDetails = false;
+    });
     widget.onSearch(query, _date);
   }
 
+  void _setDate(DateTime? date) {
+    setState(() {
+      _date = date;
+      _dateText.text = date == null ? '' : formatDate(date);
+    });
+  }
+
   Future<void> _pickDate() async {
+    if (widget.busy) return;
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -77,96 +105,126 @@ class _LiveSectionState extends State<LiveSection> {
       lastDate: DateTime(now.year + 3, 12, 31),
       helpText: '公演日を選ぶ',
     );
-    if (picked != null && mounted) setState(() => _date = picked);
+    if (picked != null && mounted) _setDate(picked);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final busy = widget.busy;
-    final date = _date;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final knownArtist = widget.knownArtist;
+    return SectionCard(
+      step: 2,
+      title: '行くライブを検索',
+      children: [
+        const Hint('ライブ名・ツアー名・会場などのキーワードで公演を探します。日付で絞り込みたいときは「詳細検索」を開いてください。'),
+        const SizedBox(height: 4),
+        Hint(
+          knownArtist == null
+              ? 'アーティストは入力から特定します'
+              : 'アーティスト: $knownArtist(表示中の動画から)',
+        ),
+        const SizedBox(height: 12),
+        Row(
           children: [
-            Text('ライブを探す', style: theme.textTheme.titleLarge),
-            Text(
-              widget.knownArtist == null
-                  ? 'アーティストは入力から特定します'
-                  : 'アーティスト: ${widget.knownArtist}(表示中の動画から)',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: liveQueryFieldKey,
-                    controller: _controller,
-                    enabled: !busy,
-                    decoration: const InputDecoration(
-                      hintText: 'ライブ名・ツアー名・会場など',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => _submit(),
-                  ),
+            Expanded(
+              child: TextField(
+                key: liveQueryFieldKey,
+                controller: _controller,
+                enabled: !busy,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(fontSize: 16),
+                decoration: const InputDecoration(
+                  labelText: 'ライブ名・ツアー名・会場など',
+                  prefixIcon: Icon(Icons.search),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: busy ? null : _pickDate,
-                  icon: const Icon(Icons.event),
-                  label: Text(date == null ? '日付' : formatDate(date)),
-                ),
-                if (date != null)
-                  IconButton(
-                    onPressed: busy ? null : () => setState(() => _date = null),
-                    icon: const Icon(Icons.clear),
-                    tooltip: '日付を消す',
-                  ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: busy ? null : _submit,
-                  icon: const Icon(Icons.travel_explore),
-                  tooltip: 'ライブを探す',
-                ),
-              ],
-            ),
-            if (_inputError != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _inputError!,
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
+                onSubmitted: (_) => _submit(),
               ),
-            _buildResult(context),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              key: liveSearchButtonKey,
+              onPressed: busy ? null : _submit,
+              child: widget.loading
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('検索'),
+            ),
           ],
         ),
+        _DetailToggle(
+          open: _showDetails,
+          count: _date == null ? 0 : 1,
+          onTap: () => setState(() => _showDetails = !_showDetails),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: _showDetails
+              ? _detailPanel(busy)
+              : const SizedBox(width: double.infinity),
+        ),
+        if (_inputError != null) ...[
+          const SizedBox(height: 8),
+          ErrorText(_inputError!),
+        ],
+        _buildResult(context),
+      ],
+    );
+  }
+
+  /// 詳細検索(任意項目)。今は公演日だけ。
+  Widget _detailPanel(bool busy) {
+    return SoftBox(
+      margin: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Hint('公演日で絞り込みます。日付だけでも検索できます。'),
+          const SizedBox(height: 12),
+          TextField(
+            key: liveDateFieldKey,
+            controller: _dateText,
+            readOnly: true,
+            enabled: !busy,
+            onTap: _pickDate,
+            style: const TextStyle(fontSize: 16),
+            decoration: InputDecoration(
+              labelText: '公演日',
+              suffixIcon: _date == null
+                  ? const Icon(Icons.calendar_today, size: 18)
+                  : IconButton(
+                      tooltip: '公演日を消す',
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: busy ? null : () => _setDate(null),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildResult(BuildContext context) {
-    final theme = Theme.of(context);
     final result = widget.result;
     if (widget.loading) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 16),
+      return const Padding(
+        padding: EdgeInsets.only(top: 16),
         child: Row(
           children: [
-            const CircularProgressIndicator(),
-            const SizedBox(width: 16),
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ライブ情報を調べています', style: theme.textTheme.titleMedium),
                   Text(
-                    'Google 検索で公演と当日の天気を調べているため、数十秒かかることがあります',
-                    style: theme.textTheme.bodySmall,
+                    'ライブ情報を調べています',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
+                  Hint('Google 検索で公演と当日の天気を調べているため、数十秒かかることがあります'),
                 ],
               ),
             ),
@@ -181,13 +239,13 @@ class _LiveSectionState extends State<LiveSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ライブ情報を取得できませんでした', style: theme.textTheme.titleMedium),
-            Text(
-              widget.error!,
-              style: TextStyle(color: theme.colorScheme.error),
+            const Text(
+              'ライブ情報を取得できませんでした',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
+            ErrorText(widget.error!),
             const SizedBox(height: 8),
-            FilledButton.tonalIcon(
+            OutlinedButton.icon(
               onPressed: widget.busy ? null : widget.onRetry,
               icon: const Icon(Icons.refresh),
               label: const Text('再試行'),
@@ -210,7 +268,10 @@ class _LiveSectionState extends State<LiveSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('該当するライブが見つかりませんでした', style: theme.textTheme.titleMedium),
+            const Text(
+              '該当するライブが見つかりませんでした',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             if (result.message.isNotEmpty &&
                 result.message != '該当するライブが見つかりませんでした。')
               Text(result.message),
@@ -220,19 +281,33 @@ class _LiveSectionState extends State<LiveSection> {
       );
     }
 
+    final selected = result.candidates
+        .where((c) => c.index == widget.selectedIndex)
+        .firstOrNull;
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('行くライブを選んでください', style: theme.textTheme.bodySmall),
-          for (final candidate in result.candidates)
-            _LiveCandidateCard(
-              candidate: candidate,
-              selected: candidate.index == widget.selectedIndex,
-              onTap: widget.busy
-                  ? null
-                  : () => widget.onSelect(candidate.index),
+          if (selected == null) ...[
+            Text(
+              '見つかった公演(${result.candidates.length}件)— 行く公演を選んでください',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            for (final candidate in result.candidates)
+              _LiveCandidateTile(
+                candidate: candidate,
+                onTap: widget.busy
+                    ? null
+                    : () => widget.onSelect(candidate.index),
+              ),
+          ] else
+            // 選んだ公演だけを出す。「変更」で選び直せる(tadasii と同じ)
+            _LiveCandidateTile(
+              candidate: selected,
+              selected: true,
+              onTap: widget.busy ? null : () => widget.onSelect(null),
             ),
           footer,
         ],
@@ -241,11 +316,44 @@ class _LiveSectionState extends State<LiveSection> {
   }
 }
 
-class _LiveCandidateCard extends StatelessWidget {
-  const _LiveCandidateCard({
-    required this.candidate,
-    required this.selected,
+/// 「詳細検索」の開閉ボタン。閉じていても入力済みの件数を表示する。
+class _DetailToggle extends StatelessWidget {
+  const _DetailToggle({
+    required this.open,
+    required this.count,
     required this.onTap,
+  });
+
+  final bool open;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: TextButton.icon(
+          onPressed: onTap,
+          icon: AnimatedRotation(
+            turns: open ? 0.5 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: const Icon(Icons.expand_more),
+          ),
+          label: Text('詳細検索(任意)${count > 0 ? '・$count件入力中' : ''}'),
+        ),
+      ),
+    );
+  }
+}
+
+/// ライブの候補(tadasii の候補タイル)。選んだ候補は薄い赤地・赤い枠・「変更」。
+class _LiveCandidateTile extends StatelessWidget {
+  const _LiveCandidateTile({
+    required this.candidate,
+    required this.onTap,
+    this.selected = false,
   });
 
   final LiveCandidate candidate;
@@ -254,31 +362,32 @@ class _LiveCandidateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final date = candidate.date;
     final location = candidate.location.isEmpty
         ? ''
         : '(${candidate.location})';
+    const detail = TextStyle(fontSize: 14);
     return Card(
-      color: selected ? scheme.primaryContainer : null,
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      color: selected ? AppColors.selected : AppColors.soft,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: selected
-            ? BorderSide(color: scheme.primary, width: 2)
-            : BorderSide.none,
+        side: BorderSide(
+          color: selected ? AppColors.accent : Colors.transparent,
+          width: 1.5,
+        ),
       ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: selected ? scheme.primary : null,
+                selected ? Icons.check_circle : Icons.music_note,
+                color: selected ? AppColors.accent : AppColors.muted,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -289,23 +398,37 @@ class _LiveCandidateCard extends StatelessWidget {
                       candidate.liveName.isEmpty
                           ? '(ライブ名不明)'
                           : candidate.liveName,
-                      style: theme.textTheme.titleMedium,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                     if (candidate.artist != null)
-                      Text('アーティスト: ${candidate.artist}'),
+                      Text('アーティスト: ${candidate.artist}', style: detail),
                     Text(
                       '場所: ${candidate.venue.isEmpty ? '不明' : candidate.venue}$location',
+                      style: detail,
                     ),
-                    Text('日付: ${date == null ? '不明' : formatDate(date)}'),
-                    Text('天気: ${candidate.weather.description}'),
+                    Text(
+                      '日付: ${date == null ? '不明' : formatDate(date)}',
+                      style: detail,
+                    ),
+                    Text('天気: ${candidate.weather.description}', style: detail),
                     if (candidate.sourceIndices.isNotEmpty)
                       Text(
                         '出典: ${candidate.sourceIndices.map((i) => '[$i]').join(' ')}',
-                        style: theme.textTheme.bodySmall,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.muted,
+                        ),
                       ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              selected
+                  ? const Text('変更', style: TextStyle(color: AppColors.accent))
+                  : const Icon(Icons.chevron_right, color: AppColors.muted),
             ],
           ),
         ),

@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+import 'package:tx_hackathon_gc/core/theme.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/culture_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/culture_repository.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_models.dart';
@@ -83,7 +85,7 @@ LiveSearchResult liveResult({bool artistKnown = true}) => LiveSearchResult(
 class FakeMvRepository implements MvRepository {
   FakeMvRepository(this.respond);
 
-  final Future<MvLookupResult> Function(String query) respond;
+  Future<MvLookupResult> Function(String query) respond;
   final queries = <String>[];
 
   @override
@@ -166,4 +168,15 @@ const fullReport = CultureReport(
   ],
   searchSuggestionsHtml: '<div>検索候補</div>',
   webSearchQueries: ['YOASOBI ファッション'],
+);
+
+/// 入力の段階と同じく、パネルを 1 本のスクロールの中に置く(spec 015)。
+Widget panelApp(Widget panel) => MaterialApp(
+  theme: buildTheme(),
+  home: Scaffold(
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: panel,
+    ),
+  ),
 );

@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/core/api_client.dart';
+import 'package:tx_hackathon_gc/core/widgets.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/culture_models.dart';
-import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_screen.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 
 import 'mv_lookup_fakes.dart';
@@ -54,8 +55,8 @@ Future<void> _pumpScreen(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
-    MaterialApp(
-      home: MvLookupScreen(
+    panelApp(
+      MvLookupPanel(
         repository: repo,
         cultureRepository: culture,
         liveRepository: FakeLiveRepository(),
@@ -68,8 +69,7 @@ Future<void> _pumpScreen(
 /// pumpAndSettle は使わない。
 Future<void> _submit(WidgetTester tester, String query) async {
   await tester.enterText(find.byKey(mvQueryFieldKey), query);
-  // 検索クエリのチップにも検索アイコンがあるため、ボタンに絞って押す
-  await tester.tap(find.widgetWithIcon(IconButton, Icons.search));
+  await tester.tap(find.byKey(mvSearchButtonKey));
   await tester.pump();
   await tester.pump();
 }
@@ -77,9 +77,8 @@ Future<void> _submit(WidgetTester tester, String query) async {
 bool _inputEnabled(WidgetTester tester) =>
     tester.widget<TextField>(find.byKey(mvQueryFieldKey)).enabled ?? true;
 
-VoidCallback? _searchButton(WidgetTester tester) => tester
-    .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.search))
-    .onPressed;
+VoidCallback? _searchButton(WidgetTester tester) =>
+    tester.widget<FilledButton>(find.byKey(mvSearchButtonKey)).onPressed;
 
 void main() {
   testWidgets('URL で動画が表示されると自動で取得が始まり、取得中は入力を受け付けない(AC-1, AC-2)', (
@@ -168,7 +167,7 @@ void main() {
     expect(find.text('調べたアーティスト: YOASOBI'), findsOneWidget);
     expect(find.text('ファッション・ビジュアル'), findsOneWidget);
     for (final chip in ['ストリート', '黒', '白', 'ベレー帽', 'J-POP']) {
-      expect(find.widgetWithText(Chip, chip), findsOneWidget);
+      expect(find.widgetWithText(Pill, chip), findsOneWidget);
     }
     expect(find.text('アニメーションと実写の融合'), findsOneWidget);
     expect(find.text('この MV の衣装'), findsOneWidget);
@@ -180,9 +179,10 @@ void main() {
     // 項目の近くの出典番号と、出典の一覧
     expect(find.text('出典: [1] [2]'), findsOneWidget);
     expect(find.text('出典: [1]'), findsOneWidget);
-    expect(find.text('[1] 記事A(example.com)'), findsOneWidget);
-    expect(find.text('https://example.org/b'), findsOneWidget);
-    // タイトルがドメイン名そのもの(Vertex AI の実際の応答)なら重ねて出さない
+    // 出典はタップで開けるリンク(spec 015)
+    expect(find.text('参照した情報源:'), findsOneWidget);
+    expect(find.text('[1] 記事A'), findsOneWidget);
+    expect(find.text('[2] 記事B'), findsOneWidget);
     expect(find.text('[3] example.net'), findsOneWidget);
     // Web 以外(テスト)では検索候補の代わりに検索クエリを出す
     expect(find.widgetWithText(Chip, 'YOASOBI ファッション'), findsOneWidget);
@@ -205,7 +205,7 @@ void main() {
     await _submit(tester, 'https://youtu.be/abcDEF12345');
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(Chip, '黒'), findsOneWidget);
+    expect(find.widgetWithText(Pill, '黒'), findsOneWidget);
     expect(find.textContaining('映像を解析できませんでした'), findsOneWidget);
   });
 

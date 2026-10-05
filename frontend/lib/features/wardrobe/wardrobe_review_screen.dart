@@ -259,36 +259,41 @@ class _WardrobeReviewScreenState extends State<WardrobeReviewScreen> {
             ),
           ],
         ),
-        bottomNavigationBar: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_hasEmptyCategory)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      '種類が空の服があります。種類を入力してください',
-                      style: TextStyle(color: theme.colorScheme.error),
+        // 画面下に固定する保存のバー(入力の段階の送信バーと同じ見た目。spec 015)
+        bottomNavigationBar: Material(
+          elevation: 8,
+          color: Colors.white,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_hasEmptyCategory)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '種類が空の服があります。種類を入力してください',
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _busy || count == 0 || _hasEmptyCategory
+                          ? null
+                          : _save,
+                      icon: _saving
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save),
+                      label: Text(count == 0 ? '保存する服がありません' : '$count 点を保存'),
                     ),
                   ),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _busy || count == 0 || _hasEmptyCategory
-                        ? null
-                        : _save,
-                    icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(count == 0 ? '保存する服がありません' : '$count 点を保存'),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -6,8 +6,9 @@ import 'package:tx_hackathon_gc/core/api_client.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/culture_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_section.dart';
-import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_screen.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/utils.dart';
 
 import 'mv_lookup_fakes.dart';
 
@@ -30,8 +31,8 @@ Future<void> _pumpScreen(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
-    MaterialApp(
-      home: MvLookupScreen(
+    panelApp(
+      MvLookupPanel(
         repository: FakeMvRepository(
           (query) async =>
               const MvLookupResult(inputType: 'url', video: _video),
@@ -45,14 +46,14 @@ Future<void> _pumpScreen(
 
 Future<void> _submitMv(WidgetTester tester, String query) async {
   await tester.enterText(find.byKey(mvQueryFieldKey), query);
-  await tester.tap(find.widgetWithIcon(IconButton, Icons.search));
+  await tester.tap(find.byKey(mvSearchButtonKey));
   await tester.pump();
   await tester.pump();
 }
 
 Future<void> _searchLive(WidgetTester tester, String query) async {
   await tester.enterText(find.byKey(liveQueryFieldKey), query);
-  await tester.tap(find.widgetWithIcon(IconButton, Icons.travel_explore));
+  await tester.tap(find.byKey(liveSearchButtonKey));
   await tester.pump();
   await tester.pump();
 }
@@ -60,8 +61,8 @@ Future<void> _searchLive(WidgetTester tester, String query) async {
 bool _enabled(WidgetTester tester, Key key) =>
     tester.widget<TextField>(find.byKey(key)).enabled ?? true;
 
-VoidCallback? _button(WidgetTester tester, IconData icon) =>
-    tester.widget<IconButton>(find.widgetWithIcon(IconButton, icon)).onPressed;
+VoidCallback? _button(WidgetTester tester, Key key) =>
+    tester.widget<FilledButton>(find.byKey(key)).onPressed;
 
 /// その候補カードの中に選択済みのアイコンがあるか。
 bool _isSelected(WidgetTester tester, String liveName) => tester.any(
@@ -78,7 +79,7 @@ void main() {
     final live = FakeLiveRepository();
     await _pumpScreen(tester, live: live);
 
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.travel_explore));
+    await tester.tap(find.byKey(liveSearchButtonKey));
     await tester.pump();
 
     expect(find.text('ライブ情報か日付を入力してください'), findsOneWidget);
@@ -134,14 +135,21 @@ void main() {
     expect(find.text('アーティスト: YOASOBI'), findsNothing);
   });
 
-  testWidgets('日付だけでも検索できる(AC-5)', (tester) async {
+  testWidgets('日付だけでも検索できる。公演日は「詳細検索」の中で選ぶ(AC-5 / spec 015)', (tester) async {
     final live = FakeLiveRepository();
     await _pumpScreen(tester, live: live);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, '日付'));
+    expect(find.byKey(liveDateFieldKey), findsNothing);
+    await tester.tap(find.text('詳細検索(任意)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(liveDateFieldKey));
     await tester.pumpAndSettle();
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
+
+    // 閉じても入力済みの件数が分かる
+    expect(find.text(formatDate(DateTime.now())), findsOneWidget);
+    expect(find.text('詳細検索(任意)・1件入力中'), findsOneWidget);
 
     await _searchLive(tester, '');
     await tester.pumpAndSettle();
@@ -151,22 +159,33 @@ void main() {
     expect(request.date, DateUtils.dateOnly(DateTime.now()));
   });
 
-  testWidgets('候補を 1 件選ぶと強調表示され、別の候補を選ぶと選択が移る(AC-12)', (tester) async {
+  testWidgets('候補を 1 件選ぶとその候補だけが強調表示され、「変更」で選び直せる(AC-12 / spec 015)', (
+    tester,
+  ) async {
     await _pumpScreen(tester, live: FakeLiveRepository());
     await _searchLive(tester, '電光石火');
     await tester.pumpAndSettle();
 
+    expect(find.text('見つかった公演(3件)— 行く公演を選んでください'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle), findsNothing);
 
     await tester.tap(find.text('公演B'));
     await tester.pump();
     expect(_isSelected(tester, '公演B'), isTrue);
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(find.text('公演A'), findsNothing);
+    expect(find.text('公演C'), findsNothing);
+    // 出典と検索候補は選んだ後も残す(利用条件)
+    expect(find.text('参照した情報源:'), findsOneWidget);
+
+    await tester.tap(find.text('変更'));
+    await tester.pump();
+    expect(find.text('公演A'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsNothing);
 
     await tester.tap(find.text('公演C'));
     await tester.pump();
     expect(_isSelected(tester, '公演C'), isTrue);
-    expect(_isSelected(tester, '公演B'), isFalse);
+    expect(find.text('公演B'), findsNothing);
   });
 
   testWidgets('見つからなければその旨を出す(AC-13)', (tester) async {
@@ -221,14 +240,14 @@ void main() {
     expect(find.text('ライブ情報を調べています'), findsOneWidget);
     expect(_enabled(tester, mvQueryFieldKey), isFalse);
     expect(_enabled(tester, liveQueryFieldKey), isFalse);
-    expect(_button(tester, Icons.search), isNull);
-    expect(_button(tester, Icons.travel_explore), isNull);
+    expect(_button(tester, mvSearchButtonKey), isNull);
+    expect(_button(tester, liveSearchButtonKey), isNull);
 
     pending.complete(liveResult());
     await tester.pumpAndSettle();
 
     expect(_enabled(tester, mvQueryFieldKey), isTrue);
-    expect(_button(tester, Icons.travel_explore), isNotNull);
+    expect(_button(tester, liveSearchButtonKey), isNotNull);
   });
 
   testWidgets('カルチャー情報の取得中はライブの検索を受け付けない(AC-14)', (tester) async {
@@ -243,11 +262,11 @@ void main() {
 
     expect(find.text('カルチャー情報を調べています'), findsOneWidget);
     expect(_enabled(tester, liveQueryFieldKey), isFalse);
-    expect(_button(tester, Icons.travel_explore), isNull);
+    expect(_button(tester, liveSearchButtonKey), isNull);
 
     pending.complete(fullReport);
     await tester.pumpAndSettle();
 
-    expect(_button(tester, Icons.travel_explore), isNotNull);
+    expect(_button(tester, liveSearchButtonKey), isNotNull);
   });
 }
