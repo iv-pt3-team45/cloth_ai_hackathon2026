@@ -166,13 +166,12 @@ async def test_generate_image_passes_mannequin_and_photos(tmp_path: Path) -> Non
     ids = register_clothes(settings)
     service, client = make_service(settings, responder())
 
-    result = await service.generate_image(
-        [ids["Tシャツ"], ids["ジーンズ"], ids["スニーカー"]], "晴れの日のコーデ"
-    )
+    result = await service.generate_image([ids["Tシャツ"], ids["ジーンズ"], ids["スニーカー"]])
 
     call = calls_of(client)[0]
     assert call["model"] == "test-image"
-    assert call["config"].response_modalities == ["TEXT", "IMAGE"]
+    # コーデ画像ではテキストの出力を許さない
+    assert call["config"].response_modalities == ["IMAGE"]
     parts: list[types.Part] = call["contents"][0].parts
     images = [p.inline_data.data for p in parts if p.inline_data]
     # 1 枚目がマネキン。写真 A(T シャツとジーンズ)は 1 回だけ
@@ -180,7 +179,8 @@ async def test_generate_image_passes_mannequin_and_photos(tmp_path: Path) -> Non
     instruction = parts[-1].text
     assert "- 画像 2 の写真から: Tシャツ(白)、ジーンズ(青)" in instruction
     assert "- 画像 3 の写真から: スニーカー" in instruction
-    assert "コーデ名: 晴れの日のコーデ" in instruction
+    # コーデ名は入れない(ロゴ入りの服と重なると画像が返らなかったため)
+    assert "コーデ名" not in instruction
     assert "写真に無い服や小物を足さないこと" in instruction
     # 生成画像は created_images/ に保存し、base64 でも返す
     assert base64.b64decode(result.data) == GENERATED
@@ -196,7 +196,7 @@ async def test_generate_image_rejects_unknown_items(tmp_path: Path) -> None:
     service, client = make_service(settings, responder())
 
     with pytest.raises(OutfitInputError):
-        await service.generate_image(["not-owned"], "")
+        await service.generate_image(["not-owned"])
     assert calls_of(client) == []
 
 
@@ -207,7 +207,7 @@ async def test_generate_image_requires_mannequin(tmp_path: Path) -> None:
     service, client = make_service(settings, responder())
 
     with pytest.raises(OutfitError, match="マネキン画像が見つかりません"):
-        await service.generate_image([ids["Tシャツ"]], "")
+        await service.generate_image([ids["Tシャツ"]])
     assert calls_of(client) == []
 
 
@@ -222,7 +222,7 @@ async def test_generate_image_fails_without_image(tmp_path: Path) -> None:
     service, _ = make_service(settings, responder(image=text_only))
 
     with pytest.raises(OutfitError, match="画像を返しませんでした"):
-        await service.generate_image([ids["Tシャツ"]], "")
+        await service.generate_image([ids["Tシャツ"]])
 
 
 async def test_generate_image_errors(tmp_path: Path) -> None:
@@ -234,4 +234,4 @@ async def test_generate_image_errors(tmp_path: Path) -> None:
         raise api_error(429, "RESOURCE_EXHAUSTED")
 
     with pytest.raises(OutfitQuotaError):
-        await make_service(settings, quota)[0].generate_image([ids["Tシャツ"]], "")
+        await make_service(settings, quota)[0].generate_image([ids["Tシャツ"]])

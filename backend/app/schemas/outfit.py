@@ -43,7 +43,7 @@ class OutfitImageRequest(BaseModel):
         ..., min_length=1, max_length=10, description="着せる手持ちの服の ID(提案の items の id)"
     )
     title: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] = Field(
-        default="", description="コーデの名前"
+        default="", description="コーデの名前(互換のため受け取るが、画像の生成には使わない)"
     )
 
 

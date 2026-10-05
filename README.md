@@ -764,7 +764,7 @@ Web アプリの下部ナビゲーション「**確認**」で、他のタブで
 - 押すと次の 2 段階で進む。もう一度押すと作り直し、前の結果は置き換わる(履歴は残さない)。
   1. **提案**(`OUTFIT_MODEL`): 手持ちの服のインデックス・MV・アーティスト・カルチャー・ライブ・天気をまとめて Gemini に渡し、
      手持ちの服から 1 コーデを選ばせる。Google 検索は使わない。**手持ちに無い服(ID)を返しても、サーバ側で取り除く**(除いた点数を画面に出す)。
-  2. **画像**(`IMAGE_MODEL` = Nano Banana 2 Flash Lite): マネキン画像(`OUTFIT_MANNEQUIN_PATH`)と、提案の服が写った**登録した写真そのもの**を渡し、
+  2. **画像**(`IMAGE_MODEL` = Nano Banana 2 Flash Lite。**画像だけを返させ、テキストの出力は許さない**): マネキン画像(`OUTFIT_MANNEQUIN_PATH`)と、提案の服が写った**登録した写真そのもの**を渡し、
      マネキンに着せた画像を 1 枚作る。1 枚の写真に複数の服が写っていれば、どの服を使うかを指示文で伝える。
      画像は `backend/app/created_images/outfit-*` にも残る(Git 管理外。4.4 と同じ)。
 - 画像だけ失敗したときは、提案は表示したまま「画像を作り直す」で画像だけやり直せる。
@@ -777,9 +777,9 @@ API から直接呼ぶ場合:
 curl -s -X POST http://localhost:8000/api/v1/outfit/suggest -H "Content-Type: application/json" \
   -d '{"video": {...}, "culture": {...}, "live": {...}}'
 
-# 画像(item_ids は提案の items の id。手持ちに無い ID は 400)
+# 画像(item_ids は提案の items の id。手持ちに無い ID は 400。title は送っても使わない)
 curl -s -X POST http://localhost:8000/api/v1/outfit/image -H "Content-Type: application/json" \
-  -d '{"item_ids": ["<id>", "<id>"], "title": "晴れの日のライブコーデ"}'
+  -d '{"item_ids": ["<id>", "<id>"]}'
 ```
 
 応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. を参照。
@@ -1110,7 +1110,7 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | 写真が `対応していない形式です` になる | jpg / png / webp のみ対応。iPhone の HEIC は「設定 → カメラ → フォーマット → 互換性優先」で JPEG にする |
 | 「コーデを提案」が押せない | 確認タブの「足りないもの」を見る。手持ちの服 1 点以上・MV の表示・「ライブを探す」での候補の選択が必要。カルチャー情報の取得中も押せない |
 | コーデ画像が `マネキン画像が見つかりません`(502) | `backend/app/assets/white_manekin.jpeg` が無い(未コミット・未取得など)か、`OUTFIT_MANNEQUIN_PATH` の誤り。パスは backend/ からの相対 |
-| コーデ画像が `モデルが画像を返しませんでした`(502) | 同じ入力でも時々画像が返らないことがある。「画像を作り直す」で再試行する。続く場合はバックエンドのログの `finish_reason`(安全フィルタなど)を見て、`IMAGE_MODEL` が画像の入力と出力に対応しているか確認する |
+| コーデ画像が `モデルが画像を返しませんでした`(502) | 応答は正常(200)だが画像が入っていなかった。以前はテキストの出力も許していたため空のテキストだけが返ることがあり、今は画像だけを返させている(`response_modalities=["IMAGE"]`)ため、モデルが画像を出さないとログに `finish_reason=NO_IMAGE` が出る。ライブ名を含むコーデ名とロゴ入りの服が重なると続くことがあったため、画像の指示文にはコーデ名を入れていない(spec 011 design.md 6.2)。「コーデを提案」から別の組み合わせで作り直す。`finish_reason` が `SAFETY` などなら入力の写真を見直し、`IMAGE_MODEL` が画像の入力と出力に対応しているか確認する |
 | コーデ提案が `手持ちの服からコーデを作れませんでした`(502) | Gemini が手持ちに無い服だけを返した(サーバ側で取り除いた結果 0 点)。もう一度押す。服の登録が少ない場合は増やす |
 | コーデ提案 / 画像が `Gemini のクォータ…`(503)/ `… 秒以内に終わりませんでした`(504) | 時間をおく、`OUTFIT_MODEL`(提案)・`IMAGE_MODEL`(画像)を変える、`OUTFIT_TIMEOUT` / `MEDIA_GENERATION_TIMEOUT` を延ばす |
 | 検索候補が文字(検索クエリ)で表示される | Web 以外で実行している。検索候補の HTML は Web でのみ描画する(4.9) |

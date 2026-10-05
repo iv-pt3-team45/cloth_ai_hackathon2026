@@ -195,12 +195,13 @@ def build_suggest_prompt(
 
 
 def build_image_parts(
-    mannequin: tuple[bytes, str], photos: list[tuple[bytes, str, list[str]]], title: str
+    mannequin: tuple[bytes, str], photos: list[tuple[bytes, str, list[str]]]
 ) -> list[types.Part]:
     """② 画像の生成の入力。1 枚目にマネキン、続けて服の写真(同じ写真は 1 回)、最後に指示文。
 
     服の見た目は写真から再現させる。指示文には、写真の番号とその写真のどの服を使うかだけを書く
     (1 枚の写真に複数の服が写っていることがあるため)。
+    コーデ名は入れない(ロゴ入りの服とライブ名を含むコーデ名が重なると、画像が返らなかったため)。
     """
     parts = [types.Part.from_bytes(data=mannequin[0], mime_type=mannequin[1])]
     lines = []
@@ -209,8 +210,9 @@ def build_image_parts(
         lines.append(f"- 画像 {number} の写真から: {'、'.join(labels)}")
     instruction = (
         "1 枚目の画像は白いマネキンです。2 枚目以降は、利用者が実際に持っている服の写真です。\n"
-        f"マネキンに、次の服をそのまま着せた写真を 1 枚作ってください"
-        f"{f'(コーデ名: {title})' if title else ''}。\n" + "\n".join(lines) + "\n\n条件:\n"
+        "マネキンに、次の服をそのまま着せた写真を 1 枚作ってください。\n"
+        + "\n".join(lines)
+        + "\n\n条件:\n"
         "- 服は写真の色・柄・形・素材感・プリントをできるだけ忠実に再現すること。\n"
         "- 写真に無い服や小物を足さないこと。\n"
         "- 1 枚の写真に複数の服が写っている場合は、指定した服だけを使うこと。\n"
@@ -336,7 +338,7 @@ class OutfitService:
             model=model,
         )
 
-    async def generate_image(self, item_ids: list[str], title: str) -> OutfitImageResponse:
+    async def generate_image(self, item_ids: list[str]) -> OutfitImageResponse:
         """提案の服の写真をマネキンに着せた画像を生成し、保存して返す。"""
         owned = load_owned(self._store)
         unknown = [cloth_id for cloth_id in item_ids if cloth_id not in owned]
@@ -353,12 +355,11 @@ class OutfitService:
                 response = await client.aio.models.generate_content(
                     model=model,
                     contents=[
-                        types.Content(
-                            role="user", parts=build_image_parts(mannequin, photos, title)
-                        )
+                        types.Content(role="user", parts=build_image_parts(mannequin, photos))
                     ],
                     config=types.GenerateContentConfig(
-                        response_modalities=["TEXT", "IMAGE"],
+                        # テキストは許さない(テキストだけで終わり画像が返らないことがあったため)
+                        response_modalities=["IMAGE"],
                         automatic_function_calling=NO_AFC,
                     ),
                 )
