@@ -1,3 +1,26 @@
+よく使うgitのコマンド
+# 一番最初にやること
+	git clone https://~~~~~~~~~
+
+# main へ切り替えて最新化するコマンドです。
+	git checkout main
+	git pull origin main
+
+# 新しいブランチを作成
+	git checkout -b feature/〇〇
+# 作業をステージング/コミット
+	git add <<対象フォルダ（スペースで区切って複数可能）>>
+	git commit -m "コメント"
+# PR作成
+	git push -u origin feature/〇〇
+	git push -u origin(gituhub) {どのブランチをアップロード}
+	
+# main を最新化するコマンドです（PowerShell）。
+	git checkout main
+	git pull origin main
+	
+
+
 # tx_hackathon_gc
 
 Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を組み合わせたアプリケーション。
