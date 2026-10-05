@@ -1,7 +1,7 @@
 # 実装タスク: 会場情報取得(F14)
 
 - 対応する設計: `./design.md`
-- 進捗: 10 / 10(位置情報の取得を追加)
+- 進捗: 13 / 15(住所抽出の廃止・検索の手がかりの追加・コーデ提案への組み込みを反映。残りは疎通確認)
 
 ## 凡例
 
@@ -49,13 +49,13 @@
   - 完了条件: `uv run python -c "from app.core.config import get_settings; print(get_settings().venue_info_model)"` が通る
   - 関連 AC: -(準備タスク)
 
-- [x] **T-08: `_extract_address` の実装とユニットテスト**
+- [x] **T-08: `_extract_address` の実装とユニットテスト**(T-11で廃止)
   - 変更対象: `backend/app/services/venue.py`、`backend/tests/test_venue.py`
   - 内容: `_search_venue`の結果から住所を抽出する。構造化出力(`response_schema`)を使用し、toolsは付けない
   - 完了条件: `uv run python -m pytest backend/tests/test_venue.py -k address` が通る(住所が取れる場合・取れない場合をモックで検証)
   - 関連 AC: AC-4
 
-- [x] **T-09: `get_venue_info` に住所抽出を組み込む**
+- [x] **T-09: `get_venue_info` に住所抽出を組み込む**(T-11で廃止)
   - 変更対象: `backend/app/services/venue.py`、`backend/tests/test_venue.py`
   - 内容: `get_venue_info`が`_extract_address`も呼び、`VenueInfo.address`に反映する。住所抽出の失敗は致命的にしない(`address=""`のまま継続)
   - 完了条件: `uv run python -m pytest backend/tests/test_venue.py` が通る
@@ -63,12 +63,40 @@
 
 ### 結合 / 仕上げ
 
-- [x] **T-10: 疎通確認(位置情報)**
+- [x] **T-10: 疎通確認(位置情報)**(T-11で廃止)
   - 完了条件: `uv run python scripts/run_agent.py -v` で会場名を含む質問をし、`VenueInfo.address`にそれらしい住所が入ることを確認する
   - 関連 AC: AC-4
 
 - [x] **T-07: 疎通確認**
   - 完了条件: `uv run python scripts/run_agent.py` で実際に会場名を含む質問を投げ、会場情報(形態)を含む応答が返ってくることを確認する。異常系(存在しない会場名など)でもエラーで落ちず「形態不明」の応答になることも確認する
   - 関連 AC: AC-1, AC-2
+
+### 2026-10-02 追加分(住所抽出の廃止・検索の手がかりの追加)
+
+- [x] **T-11: 住所抽出の廃止**
+  - 変更対象: `backend/app/services/venue.py`、`backend/tests/test_venue.py`
+  - 内容: `_extract_address`・`_AddressExtraction`・`VenueInfo.address` を削除する(天気APIを使わない方針になり用途が無くなったため)。ツールのdocstringからも住所の記述を外す
+  - 完了条件: `uv run python -m pytest` が通り、`venue.py` に住所関連のコードが残っていない
+  - 関連 AC: AC-4(廃止)
+
+- [x] **T-12: 検索の手がかり(所在地・ライブ名・公演日)の追加**
+  - 変更対象: `backend/app/services/venue.py`、`backend/tests/test_venue.py`
+  - 内容: `_build_search_prompt` を追加し、`_search_venue` / `get_venue_info` / ADKツールに任意引数 `location` / `live_name` / `live_date` を追加する。未指定でも従来どおり動く
+  - 完了条件: プロンプト組み立て・手がかりの受け渡しのユニットテストが通る
+  - 関連 AC: AC-5
+
+- [ ] **T-13: 疎通確認(手がかりあり)**
+  - 完了条件: `uv run python scripts/run_agent.py` で、同名・複数拠点の会場(例: 市民ホールに所在地を添える)や、ライブ名・公演日を含む質問をして、期待どおりの会場・形態が返ることを確認する
+  - 関連 AC: AC-5
+
+- [x] **T-14: コーデ提案(spec 011)への組み込み**
+  - 変更対象: `backend/app/services/outfit.py`、`backend/app/core/config.py`(`venue_info_timeout`)、`backend/tests/outfit_stub.py`、`backend/tests/test_outfit_service.py`
+  - 内容: 提案の前に `get_venue_info` を呼び、形態をプロンプトに足す。失敗・時間切れ・不明なら足さない
+  - 完了条件: `uv run python -m pytest` が通る
+  - 関連 AC: AC-6
+
+- [ ] **T-15: Docker経由での画面確認**
+  - 完了条件: Docker Composeでアプリを起動し、MV検索 → ライブ選択 → 確認タブで「コーデを提案」を押して、提案が返ること・バックエンドのログに会場の形態の取得が出ることを確認する
+  - 関連 AC: AC-6
 
 > ドキュメント更新(README/requirements.mdステータス変更)は、リポジトリへのコミット方針が未確定のため、本タスク一覧には含めない。

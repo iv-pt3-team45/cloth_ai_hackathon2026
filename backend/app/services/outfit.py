@@ -2,6 +2,8 @@
 
 1. 提案: 手持ちの服(spec 010 の保存先)・MV・カルチャー・ライブ・天気を Gemini に渡し、
    手持ちの服の中から 1 コーデを構造化出力で受け取る。手持ちに無い服の id は捨てる。
+   提案の前に、F14(spec 014)で会場の形態(スタンディング / 着席)を調べてプロンプトに足す。
+   分からなければ足さずに提案する。
 2. 画像: マネキン画像と、提案に使う服の**写真そのもの**を
    Nano Banana 2 Flash Lite(IMAGE_MODEL)に渡し、マネキンに着せた画像を生成する。
    生成画像は spec 003 と同じ created_images/ に保存する。
@@ -12,6 +14,7 @@
 import asyncio
 import base64
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from google import genai
@@ -26,6 +29,7 @@ from app.schemas.youtube import VideoInfo
 from app.services.cloth_index import ClothItem
 from app.services.grounding import NO_AFC, clean_list, clean_text, is_quota_error
 from app.services.media import build_file_name, get_media_client, save_media
+from app.services.venue import VenueFormat, VenueInfo, get_venue_info
 from app.services.wardrobe_registry import to_registered
 from app.services.wardrobe_store import (
     LocalWardrobeStore,
@@ -49,10 +53,24 @@ _SUGGEST_INSTRUCTION = """\
   同じ役割の服を重ねないこと。
   role には「トップス」「ボトムス」「アウター」「靴」「小物」などを書くこと。
 - 当日の天気・気温と、服の季節・暖かさを合わせること。会場が屋内か屋外かも考えること。
+- 「会場の形態」が書かれている場合は、それに合わせること。
+  スタンディングなら、長時間立って動いても疲れにくい服と歩きやすい靴を選び、
+  脱いだら荷物になる厚手の上着は避けること。
+  着席なら、座っていても窮屈にならない服を選び、後ろの人の視界をさえぎる大きな帽子などは避けること。
 - アーティストのファッションの傾向や MV の衣装の雰囲気を取り入れ、ライブの場面に合わせること
   (使う場面が「ライブ・フェス」の服を優先する)。
 - reason(服ごとの理由)と points(全体のポイント)は具体的に書くこと。日本語で書くこと。
 """
+
+
+# 会場の形態をプロンプトに書くときの表記。UNKNOWN は書かない(行ごと足さない)
+_VENUE_FORMAT_TEXT: dict[VenueFormat, str] = {
+    VenueFormat.STANDING: "スタンディング",
+    VenueFormat.SEATED: "着席",
+}
+
+# 会場の形態を調べる関数(F14 の get_venue_info と同じ呼び出し方)。テストで差し替える
+VenueLookup = Callable[..., VenueInfo]
 
 
 class OutfitError(RuntimeError):
@@ -171,9 +189,13 @@ def _culture_lines(culture: CultureResponse | None) -> list[str]:
 
 
 def build_suggest_prompt(
-    owned: Owned, video: VideoInfo, culture: CultureResponse | None, live: LiveCandidate
+    owned: Owned,
+    video: VideoInfo,
+    culture: CultureResponse | None,
+    live: LiveCandidate,
+    venue_format: VenueFormat | None = None,
 ) -> str:
-    """① 提案のプロンプト。"""
+    """① 提案のプロンプト。venue_format は F14 で調べた会場の形態(分からなければ None)。"""
     clothes = "\n".join(
         f"- id={cloth_id}: {describe_item(item)}" for cloth_id, (item, _) in owned.items()
     )
@@ -181,6 +203,11 @@ def build_suggest_prompt(
     live_lines = [
         f"- ライブ名: {live.live_name or '不明'}",
         f"- 会場: {venue or '不明'}",
+        *(
+            [f"- 会場の形態: {_VENUE_FORMAT_TEXT[venue_format]}"]
+            if venue_format in _VENUE_FORMAT_TEXT
+            else []
+        ),
         f"- 日付: {live.date.isoformat() if live.date else '不明'}",
         f"- 当日の天気: {weather_text(live.weather)}",
     ]
@@ -249,17 +276,53 @@ class OutfitService:
         settings: Settings | None = None,
         store: WardrobeStore | None = None,
         client: genai.Client | None = None,
+        venue_lookup: VenueLookup | None = None,
     ) -> None:
-        # store / client はテストで差し替えるためのもの。手持ちの服は spec 010 と同じ保存先
+        # store / client / venue_lookup はテストで差し替えるためのもの。
+        # 手持ちの服は spec 010 と同じ保存先
         self._settings = settings or get_settings()
         self._store = store or LocalWardrobeStore(self._settings.cloth_index_file)
         self._client = client
+        self._venue_lookup = venue_lookup or get_venue_info
 
     def _get_client(self) -> genai.Client:
         try:
             return self._client or get_media_client()
         except Exception as exc:
             raise OutfitError(f"Gemini のクライアントを作れませんでした: {exc}") from exc
+
+    async def _lookup_venue_format(self, live: LiveCandidate) -> VenueFormat | None:
+        """F14 で会場の形態を調べる。分からない・失敗・時間切れのときは None(提案は止めない)。
+
+        get_venue_info は同期関数なので、イベントループを止めないよう別スレッドで動かす。
+        時間切れのときは待つのをやめるだけで、スレッドの処理そのものは裏で最後まで動く。
+        """
+        if not live.venue:
+            return None
+        timeout = self._settings.venue_info_timeout
+        try:
+            async with asyncio.timeout(timeout):
+                info = await asyncio.to_thread(
+                    self._venue_lookup,
+                    live.venue,
+                    settings=self._settings,
+                    location=live.location,
+                    live_name=live.live_name,
+                    live_date=live.date.isoformat() if live.date else "",
+                )
+        except TimeoutError:
+            logger.warning(
+                "会場の形態の取得が %s 秒以内に終わらなかったため、形態なしで提案します", timeout
+            )
+            return None
+        except Exception as exc:  # get_venue_info は例外を投げない設計だが、念のため
+            logger.warning(
+                "会場の形態の取得に失敗したため、形態なしで提案します: %s", type(exc).__name__
+            )
+            return None
+        if info.status != "ok" or info.format == VenueFormat.UNKNOWN:
+            return None
+        return info.format
 
     async def suggest(
         self, video: VideoInfo, culture: CultureResponse | None, live: LiveCandidate
@@ -271,13 +334,14 @@ class OutfitService:
                 "手持ちの服が登録されていません。手持ちの服タブで登録してください。"
             )
         client = self._get_client()
+        venue_format = await self._lookup_venue_format(live)
         model = self._settings.outfit_model
         timeout = self._settings.outfit_timeout
         try:
             async with asyncio.timeout(timeout):
                 response = await client.aio.models.generate_content(
                     model=model,
-                    contents=build_suggest_prompt(owned, video, culture, live),
+                    contents=build_suggest_prompt(owned, video, culture, live, venue_format),
                     config=types.GenerateContentConfig(
                         system_instruction=_SUGGEST_INSTRUCTION,
                         response_mime_type="application/json",
