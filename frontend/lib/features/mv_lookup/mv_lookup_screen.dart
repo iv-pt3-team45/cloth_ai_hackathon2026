@@ -11,6 +11,8 @@ import 'mv_lookup_snapshot.dart';
 import 'mv_models.dart';
 import 'mv_repository.dart';
 import 'utils.dart';
+import 'venue_models.dart';
+import 'venue_repository.dart';
 
 /// MV の入力欄(テストで入力欄を区別するため)。
 const mvQueryFieldKey = ValueKey('mv-query');
@@ -23,6 +25,8 @@ typedef _LiveQuery = ({String query, DateTime? date, String? artist});
 /// - 動画情報が表示されたら、そのアーティストのカルチャー情報(spec 008)も自動で調べる。
 /// - 候補を選ぶと、画面を切り替えずにその候補の直下に情報を展開する(spec 009)。
 /// - 下部の「ライブを探す」で、ライブ情報と当日の天気を調べられる(spec 009)。
+/// - ライブを選ぶと、その会場の形態(スタンディング / 着席など)を裏で調べる(spec 014)。
+///   この画面には出さず、確認タブとコーデ提案で使う。
 /// - 状態が変わるたびに、要約を [onChanged] で外へ出す(確認タブ用。spec 011)。
 class MvLookupScreen extends StatefulWidget {
   const MvLookupScreen({
@@ -30,12 +34,14 @@ class MvLookupScreen extends StatefulWidget {
     this.repository,
     this.cultureRepository,
     this.liveRepository,
+    this.venueRepository,
     this.onChanged,
   });
 
   final MvRepository? repository;
   final CultureRepository? cultureRepository;
   final LiveRepository? liveRepository;
+  final VenueRepository? venueRepository;
 
   /// 状態が変わったときに呼ばれる(確認タブに渡すため)
   final ValueChanged<MvLookupSnapshot>? onChanged;
@@ -50,6 +56,8 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
       widget.cultureRepository ?? CultureRepository();
   late final LiveRepository _liveRepository =
       widget.liveRepository ?? LiveRepository();
+  late final VenueRepository _venueRepository =
+      widget.venueRepository ?? VenueRepository();
   final _controller = TextEditingController();
   bool _loading = false;
   // 最後に実行した MV の入力(確認タブに出すため)
@@ -73,6 +81,12 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
   int? _selectedLiveIndex;
   _LiveQuery? _lastLiveQuery;
 
+  // 選んだライブの会場の形態(spec 014)。ライブを選ぶと裏で調べる
+  VenueFormat? _venueFormat;
+  bool _venueLoading = false;
+  // 会場の形態の問い合わせの番号。選び直したときに古い結果を捨てるため
+  int _venueRequest = 0;
+
   /// 動画情報・カルチャー情報・ライブ情報のいずれかを取得中。この間は他の入力を受け付けない
   bool get _busy => _loading || _cultureLoading || _liveLoading;
 
@@ -95,6 +109,8 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
       selectedLive: selected == null || selected.isEmpty
           ? null
           : selected.first,
+      venueFormat: _venueFormat,
+      venueFormatLoading: _venueLoading,
     );
   }
 
@@ -227,6 +243,10 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
       _live = null;
       _liveError = null;
       _selectedLiveIndex = null;
+      // 選択が外れるので、調べている途中の会場の形態も捨てる
+      _venueRequest++;
+      _venueFormat = null;
+      _venueLoading = false;
     });
 
     try {
@@ -246,6 +266,43 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
     } finally {
       if (mounted) setState(() => _liveLoading = false);
     }
+  }
+
+  /// ライブを選ぶ。選んだライブの会場の形態(spec 014)を裏で調べ始める。
+  ///
+  /// 調べている間も他の操作は止めない。結果は確認タブに表示し、コーデ提案にも渡す。
+  Future<void> _selectLive(int index) async {
+    if (index == _selectedLiveIndex) return;
+    final live = _live?.candidates.where((c) => c.index == index).firstOrNull;
+    final request = ++_venueRequest;
+    if (live == null || live.venue.isEmpty) {
+      // 会場名が無ければ調べようがないので、すぐに不明にする
+      setState(() {
+        _selectedLiveIndex = index;
+        _venueFormat = VenueFormat.unknown;
+        _venueLoading = false;
+      });
+      return;
+    }
+    setState(() {
+      _selectedLiveIndex = index;
+      _venueFormat = null;
+      _venueLoading = true;
+    });
+
+    VenueFormat format;
+    try {
+      format = await _venueRepository.lookup(live);
+    } on Exception {
+      // 失敗しても選択や提案は止めない(形態は不明として扱う)
+      format = VenueFormat.unknown;
+    }
+    // 調べている間に別のライブを選び直した・検索し直した場合は、古い結果を捨てる
+    if (!mounted || request != _venueRequest) return;
+    setState(() {
+      _venueFormat = format;
+      _venueLoading = false;
+    });
   }
 
   @override
@@ -313,8 +370,7 @@ class _MvLookupScreenState extends State<MvLookupScreen> {
                     onRetry: lastLive == null
                         ? () {}
                         : () => _runLiveSearch(lastLive),
-                    onSelect: (index) =>
-                        setState(() => _selectedLiveIndex = index),
+                    onSelect: _selectLive,
                   ),
                 ),
               ],

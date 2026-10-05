@@ -2,7 +2,7 @@
 
 - 対応する要件: `./requirements.md`
 - ステータス: draft
-- 更新日: 2026-10-02(住所抽出を廃止、検索の手がかり(所在地・ライブ名・公演日)を追加)
+- 更新日: 2026-10-05(画面から呼ぶAPIを追加、形態に「混在」を追加)
 
 ## 1. 設計方針
 
@@ -43,16 +43,42 @@ get_venue_info(venue_name, *, location, live_name, live_date)   [backend/app/ser
 
 ## 3. API 設計
 
-該当なし。F14はHTTPエンドポイントを持たない。コア関数の直接呼び出し(本番)と、チャットエージェントのツール(Function Calling。開発時の動作確認用)の2通りで使える。
+### `POST /api/v1/venue/lookup`(2026-10-05 追加)
 
-本番の呼び出し元は spec 011(コーデ提案)の `OutfitService.suggest`。提案の前に、選んだライブの会場名・所在地・ライブ名・公演日を渡して呼び、形態が分かればプロンプトに `- 会場の形態: スタンディング` のような行を足す。`get_venue_info` は同期関数なので、呼び出し側で `asyncio.to_thread` を使い、`venue_info_timeout`(既定30秒)で待ち時間を区切る(詳細は spec 011 の design.md 6.1)。
+画面(MV検索タブ)がライブを選んだ時点で呼ぶ。結果は確認タブに表示し、コーデ提案(spec 011)にも渡す。
+
+リクエスト(選んだ `LiveCandidate` の値をそのまま送る。`venue` 以外は任意):
+
+```json
+{ "venue": "さいたまスーパーアリーナ", "location": "埼玉県さいたま市", "live_name": "ARENA TOUR", "date": "2023-06-04" }
+```
+
+レスポンス (200):
+
+```json
+{ "venue_name": "さいたまスーパーアリーナ", "format": "standing", "status": "ok", "message": "" }
+```
+
+- F14は失敗しても例外を投げない設計のため、失敗・時間切れも200で返す(`format: "unknown"`, `status: "error"`)。
+- 会場名が空なら422。
+- Geminiの説明文(`summary`)は返さない。グラウンディングの結果を画面にそのまま出す場合は検索候補の表示が必要になるため、画面に出すのは形態のラベルだけにする。
+- ファイル: `app/schemas/venue.py`(新規)、`app/api/routes/venue.py`(新規)、`app/api/router.py` に登録。
+
+### 呼び出し元
+
+- 画面: 上記API(ライブを選んだ時点)。
+- コーデ提案(spec 011)の `OutfitService.suggest`: 画面が形態を送ってきたら(unknown でも)それを使い、もう一度は調べない。送られてこなかったとき(調べている途中など)だけ、提案の前に調べる。
+- チャットエージェントのツール(Function Calling。開発時の動作確認用)。
+
+APIとコーデ提案は、どちらも `lookup_venue_info`(非同期の共通処理)経由で呼ぶ。`get_venue_info` は同期関数なので `asyncio.to_thread` で別スレッドで動かし、`venue_info_timeout`(既定30秒)で待ち時間を区切る。
 
 ## 4. データモデル
 
 ```python
-class VenueFormat(StrEnum):
+class VenueFormat(StrEnum):   # app/schemas/venue.py(APIでも使うため schemas に置く)
     STANDING = "standing"
     SEATED = "seated"
+    MIXED = "mixed"         # スタンディングと着席の両方がある(チケットの種別による)
     UNKNOWN = "unknown"
 
 class VenueInfo(BaseModel):
@@ -65,7 +91,7 @@ class VenueInfo(BaseModel):
 
 **住所を持たない理由**: 当初はF15(天気情報取得)の入力として住所を取得していたが、天気は外部APIを使わずユーザーの任意入力とする方針になり、用途がなくなった。F09が所在地(都道府県・市区町村)を返しているため、画面表示にもそちらで足りる。住所抽出を外したことで、Gemini呼び出しが1回減り、コストと待ち時間も下がった。
 
-会場形態の粒度は `standing` / `seated` / `unknown` の3値とする。スタンディング席と着席指定席が混在する会場は、暫定的に `unknown` に含める(将来細分化する余地は残す)。
+会場形態の粒度は `standing` / `seated` / `mixed` / `unknown` の4値とする。説明文にスタンディングと着席の両方の言葉があれば `mixed`(混在)にする(2026-10-05。それまでは `unknown` にしていた)。「スタンディングではなく着席」のような否定の文でも `mixed` になる点は割り切り。チケットの種別をユーザーが選び直せるようにするのは将来の検討事項。
 
 ## 5. フロントエンド設計
 
@@ -105,3 +131,7 @@ class VenueInfo(BaseModel):
 | backend unit | `_build_search_prompt` | pytest(手がかり無し/所在地あり/ライブ名・公演日あり。住所を聞かないことも検証) |
 | backend unit | `_search_venue` | pytest(genai.Clientをモック化し、手がかりがプロンプトに含まれることを検証) |
 | backend unit | `get_venue_info` | pytest(`_search_venue`をスタブ化し、正常系・例外系・手がかりの受け渡しを検証) |
+| backend unit | `lookup_venue_info` | pytest(手がかりの受け渡し、時間切れ・例外で unknown) |
+| backend api | `POST /api/v1/venue/lookup` | 形態と手がかりの受け渡し、失敗でも200/unknown、説明文を返さない、会場名が空なら422 |
+| frontend | MV検索タブ | ライブを選ぶと調べてsnapshotに入る、選び直したら古い結果を捨てる、失敗で不明、検索し直すとリセット |
+| frontend | 確認タブ | 形態の表示(調べています…/各形態/不明)、提案時に送る・調べている途中なら送らない |

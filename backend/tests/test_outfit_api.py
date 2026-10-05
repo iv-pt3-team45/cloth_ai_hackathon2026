@@ -9,6 +9,7 @@ from google.genai import errors
 
 from app.main import create_app
 from app.services.outfit import get_outfit_service
+from tests.gemini_stub import calls_of
 from tests.outfit_stub import (
     make_culture,
     make_live,
@@ -73,6 +74,30 @@ def test_suggest_without_culture(tmp_path: Path) -> None:
     res = api.post("/api/v1/outfit/suggest", json={**suggest_body(), "culture": None})
 
     assert res.status_code == 200
+
+
+def test_suggest_passes_venue_format(tmp_path: Path) -> None:
+    """画面が送った会場の形態(spec 014)をそのまま提案に使う。"""
+    config = make_settings(tmp_path)
+    ids = register_clothes(config)
+    service, client = make_service(config, responder(suggestion(ids["Tシャツ"])))
+    app = create_app()
+    app.dependency_overrides[get_outfit_service] = lambda: service
+
+    res = TestClient(app).post(
+        "/api/v1/outfit/suggest", json={**suggest_body(), "venue_format": "mixed"}
+    )
+
+    assert res.status_code == 200
+    assert "- 会場の形態: 混在(" in calls_of(client)[0]["contents"]
+
+
+def test_suggest_rejects_invalid_venue_format(tmp_path: Path) -> None:
+    api, _ = make_api(tmp_path, responder(suggestion()))
+
+    res = api.post("/api/v1/outfit/suggest", json={**suggest_body(), "venue_format": "sitting"})
+
+    assert res.status_code == 422
 
 
 def test_suggest_rejects_empty_wardrobe(tmp_path: Path) -> None:

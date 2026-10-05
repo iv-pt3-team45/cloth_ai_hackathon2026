@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from app.schemas.culture import CultureResponse
 from app.schemas.live import LiveCandidate
+from app.schemas.venue import VenueFormat
 from app.schemas.wardrobe import RegisteredCloth
 from app.schemas.youtube import VideoInfo
 
@@ -18,6 +19,12 @@ class OutfitSuggestRequest(BaseModel):
         default=None, description="spec 008 のカルチャー情報(取得できていなければ null)"
     )
     live: LiveCandidate = Field(..., description="spec 009 で選んだライブ")
+    venue_format: VenueFormat | None = Field(
+        default=None,
+        description=(
+            "ライブを選んだ時点で調べた会場の形態(spec 014)。省略するとサーバが提案の前に調べる"
+        ),
+    )
 
 
 class SuggestedCloth(RegisteredCloth):

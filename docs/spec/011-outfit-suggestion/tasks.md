@@ -1,7 +1,7 @@
 # 実装タスク: 情報の確認タブと、手持ちの服からのコーデ提案
 
 - 対応する設計: `./design.md`
-- 進捗: 9 / 10
+- 進捗: 10 / 11
 
 ## 凡例
 
@@ -56,6 +56,11 @@
   - 変更対象: `backend/app/services/outfit.py`、`backend/app/core/config.py`、`backend/tests/outfit_stub.py`、`backend/tests/test_outfit_service.py`
   - 内容: 提案の前に `get_venue_info` で会場の形態を調べ、プロンプトと指示文に足す。失敗・時間切れ・不明なら足さない
   - 完了条件: `uv run python -m pytest` が通る(外部通信なし)
+
+- [x] **T-11: 確認タブに会場の形態を表示し、提案に送る(spec 014 との連携、2026-10-05 追加)**
+  - 変更対象: `frontend/lib/features/outfit/confirm_screen.dart`・`outfit_repository.dart`、`backend/app/schemas/outfit.py`(`venue_format`)、`backend/app/services/outfit.py`、テスト
+  - 内容: MV 検索タブがライブを選んだ時点で調べた形態をライブ情報欄に表示し、提案のときに `venue_format` として送る
+  - 完了条件: backend の pytest と、frontend の `flutter test` が通る
 
 - [ ] **T-09: ブラウザでの目視確認**
   - 完了条件: Web アプリで確認タブの表示とコーデ提案を目視で確認する(ユーザーが実施)。確認後に `requirements.md` のステータスを `done` にする

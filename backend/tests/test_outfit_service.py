@@ -84,8 +84,11 @@ def test_prompt_includes_venue_format(tmp_path: Path) -> None:
     standing = build_suggest_prompt(owned, make_video(), None, make_live(), VenueFormat.STANDING)
     seated = build_suggest_prompt(owned, make_video(), None, make_live(), VenueFormat.SEATED)
 
+    mixed = build_suggest_prompt(owned, make_video(), None, make_live(), VenueFormat.MIXED)
+
     assert "- 会場の形態: スタンディング" in standing
     assert "- 会場の形態: 着席" in seated
+    assert "- 会場の形態: 混在(" in mixed
 
 
 def test_prompt_omits_unknown_venue_format(tmp_path: Path) -> None:
@@ -121,6 +124,42 @@ async def test_suggest_uses_venue_format(tmp_path: Path) -> None:
     assert received["live_name"] == "ARENA TOUR"
     assert received["live_date"] == "2023-06-03"
     assert "- 会場の形態: スタンディング" in calls_of(client)[0]["contents"]
+
+
+async def test_suggest_uses_given_venue_format_without_lookup(tmp_path: Path) -> None:
+    """画面が調べた形態を送ってきたら、それを使い、もう一度は調べない。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    called: list[str] = []
+
+    def record(venue_name: str, **_: Any) -> VenueInfo:
+        called.append(venue_name)
+        return VenueInfo(venue_name=venue_name, format=VenueFormat.STANDING)
+
+    service, client = make_service(settings, responder(suggestion(ids["Tシャツ"])), record)
+
+    await service.suggest(make_video(), None, make_live(), VenueFormat.SEATED)
+
+    assert called == []
+    assert "- 会場の形態: 着席" in calls_of(client)[0]["contents"]
+
+
+async def test_suggest_does_not_lookup_again_when_given_unknown(tmp_path: Path) -> None:
+    """unknown が送られてきた(画面で調べたが分からなかった)ときも、もう一度は調べない。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    called: list[str] = []
+
+    def record(venue_name: str, **_: Any) -> VenueInfo:
+        called.append(venue_name)
+        return VenueInfo(venue_name=venue_name, format=VenueFormat.STANDING)
+
+    service, client = make_service(settings, responder(suggestion(ids["Tシャツ"])), record)
+
+    await service.suggest(make_video(), None, make_live(), VenueFormat.UNKNOWN)
+
+    assert called == []
+    assert "会場の形態" not in calls_of(client)[0]["contents"]
 
 
 async def test_suggest_continues_when_venue_lookup_fails(tmp_path: Path) -> None:

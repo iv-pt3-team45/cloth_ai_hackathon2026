@@ -17,13 +17,8 @@ from app.schemas.culture import (
 )
 from app.schemas.live import LiveCandidate, LiveWeather
 from app.services.cloth_index import ClothItem
-from app.services.outfit import (
-    OutfitService,
-    VenueLookup,
-    _OutfitOutput,
-    _SuggestedItemOutput,
-)
-from app.services.venue import VenueFormat, VenueInfo
+from app.services.outfit import OutfitService, _OutfitOutput, _SuggestedItemOutput
+from app.services.venue import VenueFormat, VenueInfo, VenueLookup
 from app.services.wardrobe_store import LocalWardrobeStore
 from tests.gemini_stub import Responder, parsed_response
 from tests.gemini_stub import make_client as _make_client

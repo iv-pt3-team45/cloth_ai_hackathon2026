@@ -1,5 +1,10 @@
 """venue.py の単体テスト(外部通信は行わない)。"""
 
+import time
+from pathlib import Path
+from typing import Any
+
+from app.core.config import Settings
 from app.services.venue import VenueFormat, _build_search_prompt, _classify_format
 
 
@@ -15,10 +20,8 @@ def test_classify_format_unknown_when_no_keyword() -> None:
     assert _classify_format("収容人数は5000人規模の会場です。") == VenueFormat.UNKNOWN
 
 
-def test_classify_format_unknown_when_mixed() -> None:
-    assert (
-        _classify_format("1階はスタンディング、2階は全席指定のホールです。") == VenueFormat.UNKNOWN
-    )
+def test_classify_format_mixed_when_both_keywords() -> None:
+    assert _classify_format("1階はスタンディング、2階は全席指定のホールです。") == VenueFormat.MIXED
 
 
 def test_build_search_prompt_venue_only() -> None:
@@ -107,3 +110,67 @@ def test_search_venue_sends_prompt_with_hints() -> None:
     contents = mock_client.models.generate_content.call_args.kwargs["contents"]
     assert "愛知県名古屋市" in contents
     assert "テストツアー" in contents
+
+
+# --- lookup_venue_info(非同期の呼び出し元向け) ------------------------------
+
+
+def _settings(tmp_path: Path, **overrides: Any) -> Settings:
+    return Settings(cloth_index_path=str(tmp_path / "index.json"), **overrides)
+
+
+async def test_lookup_venue_info_passes_hints(tmp_path: Path) -> None:
+    from app.services import venue
+
+    received: dict[str, Any] = {}
+
+    def fake(venue_name: str, **kwargs: Any) -> venue.VenueInfo:
+        received.update(venue_name=venue_name, **kwargs)
+        return venue.VenueInfo(venue_name=venue_name, format=VenueFormat.SEATED)
+
+    settings = _settings(tmp_path)
+    info = await venue.lookup_venue_info(
+        "日本武道館",
+        location="東京都千代田区",
+        live_name="テストツアー",
+        live_date="2026-12-24",
+        settings=settings,
+        lookup=fake,
+    )
+
+    assert info.format == VenueFormat.SEATED
+    assert received == {
+        "venue_name": "日本武道館",
+        "settings": settings,
+        "location": "東京都千代田区",
+        "live_name": "テストツアー",
+        "live_date": "2026-12-24",
+    }
+
+
+async def test_lookup_venue_info_times_out_as_unknown(tmp_path: Path) -> None:
+    from app.services import venue
+
+    def slow(venue_name: str, **_: Any) -> venue.VenueInfo:
+        time.sleep(0.3)
+        return venue.VenueInfo(venue_name=venue_name, format=VenueFormat.STANDING)
+
+    info = await venue.lookup_venue_info(
+        "日本武道館", settings=_settings(tmp_path, venue_info_timeout=0.05), lookup=slow
+    )
+
+    assert info.status == "error"
+    assert info.format == VenueFormat.UNKNOWN
+    assert "秒以内" in info.message
+
+
+async def test_lookup_venue_info_returns_unknown_on_exception(tmp_path: Path) -> None:
+    from app.services import venue
+
+    def broken(venue_name: str, **_: Any) -> venue.VenueInfo:
+        raise RuntimeError("想定外")
+
+    info = await venue.lookup_venue_info("日本武道館", settings=_settings(tmp_path), lookup=broken)
+
+    assert info.status == "error"
+    assert info.format == VenueFormat.UNKNOWN

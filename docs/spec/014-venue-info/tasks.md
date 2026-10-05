@@ -1,7 +1,7 @@
 # 実装タスク: 会場情報取得(F14)
 
 - 対応する設計: `./design.md`
-- 進捗: 13 / 15(住所抽出の廃止・検索の手がかりの追加・コーデ提案への組み込みを反映。残りは疎通確認)
+- 進捗: 16 / 18(画面から呼ぶAPI・確認タブの表示・混在を追加。残りは疎通確認)
 
 ## 凡例
 
@@ -96,7 +96,24 @@
   - 関連 AC: AC-6
 
 - [ ] **T-15: Docker経由での画面確認**
-  - 完了条件: Docker Composeでアプリを起動し、MV検索 → ライブ選択 → 確認タブで「コーデを提案」を押して、提案が返ること・バックエンドのログに会場の形態の取得が出ることを確認する
+  - 完了条件: Docker Composeでアプリを起動し、MV検索 → ライブ選択 → 確認タブに「会場の形態」が出ること、「コーデを提案」を押して形態を踏まえた提案が返ることを確認する
   - 関連 AC: AC-6
+
+### 2026-10-05 追加分(ライブを選んだ時点で形態を調べる・混在)
+
+- [x] **T-16: 形態に「混在」を追加**
+  - 変更対象: `backend/app/schemas/venue.py`(新規。`VenueFormat` を移動)、`backend/app/services/venue.py`、`backend/app/services/outfit.py`(表記と指示文)
+  - 完了条件: 両方のキーワードがある説明文が `mixed` になるテストが通る
+  - 関連 AC: AC-8
+
+- [x] **T-17: `POST /api/v1/venue/lookup` の追加と共通化**
+  - 変更対象: `backend/app/api/routes/venue.py`(新規)、`backend/app/api/router.py`、`backend/app/services/venue.py`(`lookup_venue_info`)、`backend/app/services/outfit.py`、`backend/app/schemas/outfit.py`(`venue_format`)、`backend/tests/test_venue_api.py`(新規)ほか
+  - 完了条件: `uv run python -m pytest` が通る
+  - 関連 AC: AC-6, AC-7
+
+- [x] **T-18: 画面(ライブを選んだら調べる・確認タブに表示・提案に送る)**
+  - 変更対象: `frontend/lib/features/mv_lookup/venue_models.dart`・`venue_repository.dart`(新規)、`mv_lookup_screen.dart`、`mv_lookup_snapshot.dart`、`frontend/lib/features/outfit/confirm_screen.dart`・`outfit_repository.dart`、テスト
+  - 完了条件: `flutter analyze` と `flutter test` が通る(フロントのコンテナかCIで実行)
+  - 関連 AC: AC-7
 
 > ドキュメント更新(README/requirements.mdステータス変更)は、リポジトリへのコミット方針が未確定のため、本タスク一覧には含めない。

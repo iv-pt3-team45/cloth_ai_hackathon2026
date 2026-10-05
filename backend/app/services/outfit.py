@@ -2,7 +2,8 @@
 
 1. 提案: 手持ちの服(spec 010 の保存先)・MV・カルチャー・ライブ・天気を Gemini に渡し、
    手持ちの服の中から 1 コーデを構造化出力で受け取る。手持ちに無い服の id は捨てる。
-   提案の前に、F14(spec 014)で会場の形態(スタンディング / 着席)を調べてプロンプトに足す。
+   会場の形態(スタンディング / 着席 / 混在。spec 014)が分かればプロンプトに足す。
+   画面がライブを選んだ時点で調べた形態を送ってくればそれを使い、送られてこなければ提案の前に調べる。
    分からなければ足さずに提案する。
 2. 画像: マネキン画像と、提案に使う服の**写真そのもの**を
    Nano Banana 2 Flash Lite(IMAGE_MODEL)に渡し、マネキンに着せた画像を生成する。
@@ -14,7 +15,6 @@
 import asyncio
 import base64
 import logging
-from collections.abc import Callable
 from pathlib import Path
 
 from google import genai
@@ -29,7 +29,7 @@ from app.schemas.youtube import VideoInfo
 from app.services.cloth_index import ClothItem
 from app.services.grounding import NO_AFC, clean_list, clean_text, is_quota_error
 from app.services.media import build_file_name, get_media_client, save_media
-from app.services.venue import VenueFormat, VenueInfo, get_venue_info
+from app.services.venue import VenueFormat, VenueLookup, get_venue_info, lookup_venue_info
 from app.services.wardrobe_registry import to_registered
 from app.services.wardrobe_store import (
     LocalWardrobeStore,
@@ -57,6 +57,7 @@ _SUGGEST_INSTRUCTION = """\
   スタンディングなら、長時間立って動いても疲れにくい服と歩きやすい靴を選び、
   脱いだら荷物になる厚手の上着は避けること。
   着席なら、座っていても窮屈にならない服を選び、後ろの人の視界をさえぎる大きな帽子などは避けること。
+  混在(スタンディングと着席の両方がある)なら、立っても座っても困らない、脱ぎ着しやすく動きやすい服を選ぶこと。
 - アーティストのファッションの傾向や MV の衣装の雰囲気を取り入れ、ライブの場面に合わせること
   (使う場面が「ライブ・フェス」の服を優先する)。
 - reason(服ごとの理由)と points(全体のポイント)は具体的に書くこと。日本語で書くこと。
@@ -67,10 +68,10 @@ _SUGGEST_INSTRUCTION = """\
 _VENUE_FORMAT_TEXT: dict[VenueFormat, str] = {
     VenueFormat.STANDING: "スタンディング",
     VenueFormat.SEATED: "着席",
+    VenueFormat.MIXED: (
+        "混在(スタンディングと着席の両方がある。どちらになるかはチケットの種別による)"
+    ),
 }
-
-# 会場の形態を調べる関数(F14 の get_venue_info と同じ呼び出し方)。テストで差し替える
-VenueLookup = Callable[..., VenueInfo]
 
 
 class OutfitError(RuntimeError):
@@ -294,47 +295,42 @@ class OutfitService:
     async def _lookup_venue_format(self, live: LiveCandidate) -> VenueFormat | None:
         """F14 で会場の形態を調べる。分からない・失敗・時間切れのときは None(提案は止めない)。
 
-        get_venue_info は同期関数なので、イベントループを止めないよう別スレッドで動かす。
-        時間切れのときは待つのをやめるだけで、スレッドの処理そのものは裏で最後まで動く。
+        別スレッドでの実行と待ち時間の上限は lookup_venue_info に任せる(API と共通)。
         """
         if not live.venue:
             return None
-        timeout = self._settings.venue_info_timeout
-        try:
-            async with asyncio.timeout(timeout):
-                info = await asyncio.to_thread(
-                    self._venue_lookup,
-                    live.venue,
-                    settings=self._settings,
-                    location=live.location,
-                    live_name=live.live_name,
-                    live_date=live.date.isoformat() if live.date else "",
-                )
-        except TimeoutError:
-            logger.warning(
-                "会場の形態の取得が %s 秒以内に終わらなかったため、形態なしで提案します", timeout
-            )
-            return None
-        except Exception as exc:  # get_venue_info は例外を投げない設計だが、念のため
-            logger.warning(
-                "会場の形態の取得に失敗したため、形態なしで提案します: %s", type(exc).__name__
-            )
-            return None
+        info = await lookup_venue_info(
+            live.venue,
+            location=live.location,
+            live_name=live.live_name,
+            live_date=live.date.isoformat() if live.date else "",
+            settings=self._settings,
+            lookup=self._venue_lookup,
+        )
         if info.status != "ok" or info.format == VenueFormat.UNKNOWN:
             return None
         return info.format
 
     async def suggest(
-        self, video: VideoInfo, culture: CultureResponse | None, live: LiveCandidate
+        self,
+        video: VideoInfo,
+        culture: CultureResponse | None,
+        live: LiveCandidate,
+        venue_format: VenueFormat | None = None,
     ) -> OutfitSuggestion:
-        """手持ちの服の中から 1 コーデを提案する。"""
+        """手持ちの服の中から 1 コーデを提案する。
+
+        venue_format は画面がライブを選んだ時点で調べた会場の形態。送られてきたら(unknown でも)
+        もう一度は調べない。None のときだけ、提案の前に F14 で調べる。
+        """
         owned = load_owned(self._store)
         if not owned:
             raise OutfitInputError(
                 "手持ちの服が登録されていません。手持ちの服タブで登録してください。"
             )
         client = self._get_client()
-        venue_format = await self._lookup_venue_format(live)
+        if venue_format is None:
+            venue_format = await self._lookup_venue_format(live)
         model = self._settings.outfit_model
         timeout = self._settings.outfit_timeout
         try:

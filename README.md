@@ -248,6 +248,8 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `OUTFIT_MODEL` | `gemini-3.5-flash-lite` | コーデ提案(4.12)で、手持ちの服から組み合わせを選ぶモデル。画像の生成は `IMAGE_MODEL` |
 | `OUTFIT_TIMEOUT` | `120.0` | コーデ提案(文字)の待ち時間上限(秒) |
 | `OUTFIT_MANNEQUIN_PATH` | `app/assets/white_manekin.jpeg` | 服を着せるマネキン画像(backend/ からの相対) |
+| `VENUE_INFO_MODEL` | `gemini-2.5-flash` | 会場の形態(スタンディング / 着席 / 混在)を Google 検索で調べるモデル(spec 014) |
+| `VENUE_INFO_TIMEOUT` | `30.0` | 会場の形態を調べる待ち時間の上限(秒)。超えたら「不明」として進める |
 
 ### 3.3 Google Cloud 認証(ADC)
 
@@ -754,7 +756,7 @@ Web アプリの下部ナビゲーション「**確認**」で、他のタブで
 | 入力 | MV 名 / URL、ライブ検索の条件(ライブ情報・日付) | MV 検索タブ |
 | MV 情報 / アーティスト情報 | サムネイル・曲名・アーティスト名・リンク / 特定したアーティスト名と概要 | MV 検索タブ(4.8) |
 | カルチャー情報 | ファッション・ビジュアルの傾向、「この MV の衣装」、音楽ジャンル | MV 検索タブ(動画を選ぶと自動。4.9) |
-| ライブ情報 | 選んだライブのライブ名・場所・日付と当日の天気 | MV 検索タブの「ライブを探す」(4.10) |
+| ライブ情報 | 選んだライブのライブ名・場所・日付と当日の天気、客席(スタンディング / 着席 / 両方あり / 不明) | MV 検索タブの「ライブを探す」(4.10)。客席はライブを選ぶと裏で調べる(spec 014) |
 | 手持ちの服 | 小さな写真の横並び(横スクロール)。1 画面に幅 600 未満で 4 枚、1024 未満で 6 枚、それ以上で 8 枚 | 手持ちの服タブ(4.11) |
 
 - 確認タブは**表示専用**。まだ取得していない欄には「まだありません(…タブで…)」と出る。他のタブで変えた内容はそのまま反映される
@@ -768,6 +770,7 @@ Web アプリの下部ナビゲーション「**確認**」で、他のタブで
      マネキンに着せた画像を 1 枚作る。1 枚の写真に複数の服が写っていれば、どの服を使うかを指示文で伝える。
      画像は `backend/app/created_images/outfit-*` にも残る(Git 管理外。4.4 と同じ)。
 - 画像だけ失敗したときは、提案は表示したまま「画像を作り直す」で画像だけやり直せる。
+- **会場の形態**(spec 014): MV 検索タブでライブを選ぶと、その会場がスタンディングか着席か(両方あれば「混在」)をGemini + Google 検索で裏で調べる(`VENUE_INFO_MODEL`、数秒〜十数秒)。確認タブに「客席: スタンディング(立ち見)」のように表示し、提案のときに一緒に送る。調べている途中で提案した場合はサーバが提案の前に調べる。分からなければ「不明」で、形態なしで提案する。
 - 所要時間の目安は、提案が数秒〜十数秒、画像が十数秒〜数十秒。
 
 API から直接呼ぶ場合:
@@ -775,14 +778,18 @@ API から直接呼ぶ場合:
 ```bash
 # 提案(video / live は MV 検索・ライブ検索の応答をそのまま渡す。culture は省略可)
 curl -s -X POST http://localhost:8000/api/v1/outfit/suggest -H "Content-Type: application/json" \
-  -d '{"video": {...}, "culture": {...}, "live": {...}}'
+  -d '{"video": {...}, "culture": {...}, "live": {...}, "venue_format": "standing"}'
+
+# 会場の形態(venue 以外は任意。失敗しても 200 で format は unknown)
+curl -s -X POST http://localhost:8000/api/v1/venue/lookup -H "Content-Type: application/json" \
+  -d '{"venue": "さいたまスーパーアリーナ", "location": "埼玉県さいたま市", "live_name": "ARENA TOUR", "date": "2023-06-04"}'
 
 # 画像(item_ids は提案の items の id。手持ちに無い ID は 400)
 curl -s -X POST http://localhost:8000/api/v1/outfit/image -H "Content-Type: application/json" \
   -d '{"item_ids": ["<id>", "<id>"], "title": "晴れの日のライブコーデ"}'
 ```
 
-応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. を参照。
+応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. (会場の形態は [docs/spec/014-venue-info/design.md](docs/spec/014-venue-info/design.md) の 3.)を参照。
 
 ---
 

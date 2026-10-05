@@ -2,6 +2,7 @@ import 'package:tx_hackathon_gc/features/mv_lookup/culture_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_snapshot.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/outfit_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/outfit_repository.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_models.dart';
@@ -31,7 +32,11 @@ const ownedJeans = RegisteredCloth(
 );
 
 /// MV・カルチャー・ライブの選択がそろった状態。
-MvLookupSnapshot fullSnapshot({LiveCandidate? selectedLive}) {
+MvLookupSnapshot fullSnapshot({
+  LiveCandidate? selectedLive,
+  VenueFormat? venueFormat,
+  bool venueFormatLoading = false,
+}) {
   final lives = liveResult();
   return MvLookupSnapshot(
     mvQuery: 'アイドル',
@@ -41,6 +46,8 @@ MvLookupSnapshot fullSnapshot({LiveCandidate? selectedLive}) {
     liveDate: DateTime(2023, 6, 4),
     liveResult: lives,
     selectedLive: selectedLive ?? lives.candidates.first,
+    venueFormat: venueFormat,
+    venueFormatLoading: venueFormatLoading,
   );
 }
 
@@ -61,6 +68,7 @@ typedef SuggestCall = ({
   MvVideo video,
   LiveCandidate live,
   CultureReport? culture,
+  VenueFormat? venueFormat,
 });
 
 /// バックエンドを呼ばないコーデ提案のリポジトリ。呼び出しを記録する。
@@ -77,8 +85,14 @@ class FakeOutfitRepository implements OutfitRepository {
     required MvVideo video,
     required LiveCandidate live,
     CultureReport? culture,
+    VenueFormat? venueFormat,
   }) {
-    suggestCalls.add((video: video, live: live, culture: culture));
+    suggestCalls.add((
+      video: video,
+      live: live,
+      culture: culture,
+      venueFormat: venueFormat,
+    ));
     return suggestResponder?.call() ??
         Future.value(suggestionOf('晴れの日のライブコーデ', excluded: 1));
   }

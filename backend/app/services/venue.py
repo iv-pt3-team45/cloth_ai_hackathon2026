@@ -1,14 +1,14 @@
 """会場情報を取得するエージェントツール(F14)。
 
 会場名(と、分かれば所在地・ライブ名・公演日)からGemini APIのGoogle検索グラウンディングで
-会場情報を調べ、座席形態(スタンディング/着席/不明)を推定する。
+会場情報を調べ、座席形態(スタンディング/着席/混在/不明)を推定する。
 
 詳細は docs/spec/014-venue-info/design.md を参照。
 """
 
+import asyncio
 import logging
 from collections.abc import Callable
-from enum import StrEnum
 from typing import Any, Literal
 
 from google import genai
@@ -16,6 +16,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings, get_settings
+from app.schemas.venue import VenueFormat
 from app.services.media import get_media_client
 
 logger = logging.getLogger(__name__)
@@ -23,14 +24,6 @@ logger = logging.getLogger(__name__)
 
 class VenueSearchError(RuntimeError):
     """会場情報の検索(Gemini呼び出し)に失敗したときの例外。"""
-
-
-class VenueFormat(StrEnum):
-    """会場の座席形態。粒度は design.md の決定に合わせ3値とする。"""
-
-    STANDING = "standing"
-    SEATED = "seated"
-    UNKNOWN = "unknown"
 
 
 class VenueInfo(BaseModel):
@@ -51,14 +44,15 @@ def _classify_format(raw_text: str) -> VenueFormat:
     """会場の説明文からキーワードマッチングで座席形態を判定する。
 
     外部呼び出しを行わない純粋関数(ユニットテストしやすくするため)。
-    スタンディング/着席どちらのキーワードも含む(混在)場合は、
-    design.md の決定に従い暫定的に UNKNOWN として扱う。
+    スタンディング/着席どちらのキーワードも含む場合は MIXED(混在)とする
+    (例: 1 階スタンディング・2 階指定席。どちらになるかはチケットの種別による)。
+    「スタンディングではなく着席」のような否定の文でも MIXED になる点は割り切り。
     """
     has_standing = any(keyword in raw_text for keyword in _STANDING_KEYWORDS)
     has_seated = any(keyword in raw_text for keyword in _SEATED_KEYWORDS)
 
     if has_standing and has_seated:
-        return VenueFormat.UNKNOWN
+        return VenueFormat.MIXED
     if has_standing:
         return VenueFormat.STANDING
     if has_seated:
@@ -173,6 +167,59 @@ def get_venue_info(
     )
 
 
+# 会場の形態を調べる関数(get_venue_info と同じ呼び出し方)。テストで差し替える
+VenueLookup = Callable[..., VenueInfo]
+
+
+def get_venue_lookup() -> VenueLookup:
+    """FastAPI の Depends 用。テスト時は override して差し替える。"""
+    return get_venue_info
+
+
+async def lookup_venue_info(
+    venue_name: str,
+    *,
+    location: str = "",
+    live_name: str = "",
+    live_date: str = "",
+    settings: Settings | None = None,
+    lookup: VenueLookup = get_venue_info,
+) -> VenueInfo:
+    """非同期の呼び出し元(API・コーデ提案)から get_venue_info を呼ぶ。
+
+    get_venue_info は同期関数なので、イベントループを止めないよう別スレッドで動かす。
+    待ち時間の上限は settings.venue_info_timeout。時間切れは待つのをやめるだけで、
+    スレッドの処理そのものは裏で最後まで動く。
+    失敗・時間切れでも例外は投げず、format=UNKNOWN / status="error" を返す。
+    """
+    settings = settings or get_settings()
+    timeout = settings.venue_info_timeout
+    try:
+        async with asyncio.timeout(timeout):
+            return await asyncio.to_thread(
+                lookup,
+                venue_name,
+                settings=settings,
+                location=location,
+                live_name=live_name,
+                live_date=live_date,
+            )
+    except TimeoutError:
+        logger.warning(
+            "会場の形態の取得が %s 秒以内に終わりませんでした(会場名: %s)", timeout, venue_name
+        )
+        return VenueInfo(
+            venue_name=venue_name,
+            status="error",
+            message=f"会場の形態の取得が {timeout:g} 秒以内に終わりませんでした。",
+        )
+    except Exception as exc:  # get_venue_info は例外を投げない設計だが、念のため
+        logger.warning("会場の形態の取得に失敗しました: %s", type(exc).__name__)
+        return VenueInfo(
+            venue_name=venue_name, status="error", message="会場の形態の取得に失敗しました。"
+        )
+
+
 def build_venue_tools(settings: Settings | None = None) -> list[Callable[..., Any]]:
     """設定を閉じ込めたツール関数を作る(wardrobe.py の build_wardrobe_tools と同じパターン)。"""
     bound = settings or get_settings()
@@ -183,7 +230,7 @@ def build_venue_tools(settings: Settings | None = None) -> list[Callable[..., An
         live_name: str = "",
         live_date: str = "",
     ) -> dict[str, Any]:
-        """会場名から、会場の座席形態(スタンディング/着席/不明)を調べる。
+        """会場名から、会場の座席形態(スタンディング/着席/混在/不明)を調べる。
 
         「会場は座って見られる?」「スタンディングの会場?」のように、
         コーディネート提案の材料として会場の形態が話題になったときに使う。
@@ -195,7 +242,7 @@ def build_venue_tools(settings: Settings | None = None) -> list[Callable[..., An
             live_date: 公演日(YYYY-MM-DD)。分かるときだけ渡す。
 
         Returns:
-            status="ok"の場合、format(standing/seated/unknown)とsummary(説明文)。
+            status="ok"の場合、format(standing/seated/mixed/unknown)とsummary(説明文)。
             取得に失敗した場合はstatus="error"とmessage(理由)。
             いずれの場合もformatは必ず含まれる(失敗時はunknown)。
         """
