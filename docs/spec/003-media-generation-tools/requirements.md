@@ -39,7 +39,8 @@ ADK のツール(Function Calling)としてメディア生成を持たせ、エ�
 
 ## 5. 制約 / 前提
 
-- 画像生成は `generateContent`(`response_modalities=["TEXT","IMAGE"]`)でインライン画像が返る。
+- 画像生成は `generateContent`(`response_modalities=["IMAGE"]`)でインライン画像が返る。
+  (当初は `["TEXT","IMAGE"]`。文字だけ返って画像が欠けることがあるため、画像だけを返させるよう変更した)
 - **動画生成は Interactions API 専用**。`generateContent` では 400 になるため `client.interactions.create()` を使う。
   結果は `output_video.data`(base64)で返る。生成には数十秒かかる。
 - 認証は ADC(spec 001 と同じ)。

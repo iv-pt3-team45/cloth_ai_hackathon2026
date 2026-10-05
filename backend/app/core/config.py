@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     created_images_dir: str = "app/created_images"
     created_videos_dir: str = "app/created_videos"
     media_generation_timeout: int = 300
+    # 画像生成モデルに送るプロンプトと応答の全文をログ(ターミナル)に出す。一時的なデバッグ用
+    # (画像のバイト列は形式と大きさだけ出す)。不要になったら false にする
+    image_debug_log: bool = True
 
     # --- エージェントループ ---
     # 検証用モデル。生成モデルとクォータを分けたいときは別のモデルを指定する

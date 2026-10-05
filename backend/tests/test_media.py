@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from google.genai import types
 
 from app.core.config import Settings
 from app.services import media
@@ -58,6 +59,33 @@ def test_generate_image_returns_error_dict_on_failure(monkeypatch: pytest.Monkey
 
     assert result["status"] == "error"
     assert "クォータ超過" in str(result["message"])
+
+
+def test_generate_image_requests_image_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """画像だけを返させ、応答の画像を保存する。"""
+    configs: list[types.GenerateContentConfig] = []
+
+    class FakeModels:
+        def generate_content(
+            self, *, model: str, contents: str, config: types.GenerateContentConfig
+        ) -> types.GenerateContentResponse:
+            configs.append(config)
+            image = types.Part.from_bytes(data=b"png", mime_type="image/png")
+            content = types.Content(role="model", parts=[image])
+            return types.GenerateContentResponse(candidates=[types.Candidate(content=content)])
+
+    class FakeClient:
+        models = FakeModels()
+
+    monkeypatch.setattr(media, "get_media_client", lambda: FakeClient())
+
+    result = media._generate_image("青空", Settings(created_images_dir=str(tmp_path)))
+
+    assert configs[0].response_modalities == ["IMAGE"]
+    assert result["status"] == "ok"
+    assert Path(str(result["path"])).read_bytes() == b"png"
 
 
 def test_generate_video_returns_error_dict_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
