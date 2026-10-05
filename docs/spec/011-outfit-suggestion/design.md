@@ -80,7 +80,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 
 ### `POST /api/v1/outfit/image`
 
-リクエスト: `{ "item_ids": ["3f9c0d2e1a7b", "…"], "title": "…" }`(1〜10 件)
+リクエスト: `{ "item_ids": ["3f9c0d2e1a7b", "…"], "title": "…" }`(1〜10 件)。`title` は互換のため受け取るが、画像の生成には使わない(6.2)
 
 レスポンス (200): `{ "mime_type": "image/png", "data": "<base64>", "file_name": "outfit-….png", "model": "gemini-3.1-flash-lite-image" }`
 
@@ -106,7 +106,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 | `OutfitSuggestRequest` | `video: VideoInfo`(007)、`culture: CultureResponse \| None`(008)、`live: LiveCandidate`(009) |
 | `SuggestedCloth` | spec 010 の `RegisteredCloth` + `role`(トップス / ボトムスなど)・`reason` |
 | `OutfitSuggestion` | `title` / `summary` / `points: list[str]` / `items: list[SuggestedCloth]` / `excluded_count` / `model` |
-| `OutfitImageRequest` | `item_ids: list[str]`(1〜10)、`title` |
+| `OutfitImageRequest` | `item_ids: list[str]`(1〜10)、`title`(省略可。使わない) |
 | `OutfitImageResponse` | `mime_type` / `data`(base64)/ `file_name` / `model` |
 
 構造化出力(`app/services/outfit.py` 内のみ): `_OutfitOutput { title, summary, points, items: [{ id, role, reason }] }`。
@@ -199,9 +199,17 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 - 入力: **1 枚目にマネキン画像**、続けて**提案に使う服の写真**(同じ写真は 1 回だけ)、最後に指示文。
 - 指示文は写真の番号と、その写真のどの服を使うか(種類と色だけ。1 枚の写真に複数の服が写っていることがあるため)を伝える。
   服の見た目は**写真から再現させる**(属性の文字から作らせない)。
+  **コーデ名は入れない**(下の検証で、ロゴ入りの服とライブ名を含むコーデ名が重なると画像が返らなかったため。2026-10-05)。
 - 指示: マネキンに指定の服をそのまま着せる。写真の色・柄・形・プリントを忠実に再現する。写真に無い服や小物を足さない。
   マネキンの姿勢・台・背景・画角はそのまま保つ。
-- `response_modalities=["TEXT", "IMAGE"]`(spec 003 の画像生成と同じ)。応答の最初の画像を使う。
+- `response_modalities=["IMAGE"]`(**テキストの出力は許さない**)。応答の最初の画像を使う。
+  当初は spec 003 と同じ `["TEXT", "IMAGE"]` だったが、正常終了(`finish_reason=STOP`)なのに空のテキストだけが返り、
+  画像が無いことが度々あったため変更した(2026-10-02)。
+  ただし同日の検証(ピンクのロゴ T シャツ + デニムの同じ入力で各 5 回)では、`["TEXT", "IMAGE"]` は 5 回とも `STOP` で空のテキスト、
+  `["IMAGE"]` は 5 回とも `NO_IMAGE` で、どちらも画像は 0 / 5 だった。変更で失敗の理由が見分けやすくなったが、
+  原因の切り分け(2026-10-05、画像のみ・各 2 回): ロゴ T シャツだけ + コーデ名あり 0 / 2、白 T シャツ + デニム + コーデ名あり 2 / 2、
+  ロゴ T シャツ + デニム + **コーデ名なし 2 / 2**。ライブ名(「電光石火」)を含むコーデ名とロゴ入りの服が重なると、
+  モデルが画像を出さないとみられる(件数は少ない)。画像にはコーデ名が要らないため、指示文から外した。
 
 ### 6.3 設定
 
