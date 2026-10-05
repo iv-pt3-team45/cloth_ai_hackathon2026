@@ -19,6 +19,7 @@ from google import genai
 from google.genai import types
 
 from app.core.config import Settings, get_settings
+from app.services.image_debug import log_image_error, log_image_request, log_image_response
 
 logger = logging.getLogger(__name__)
 
@@ -93,11 +94,20 @@ def _failure(message: str) -> dict[str, Any]:
 def _generate_image(prompt: str, settings: Settings) -> dict[str, Any]:
     """画像生成の本体(例外を投げる。公開ツールはこれを包む)。"""
     client = get_media_client()
-    response = client.models.generate_content(
-        model=settings.image_model,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
-    )
+    # 画像だけを返させる(TEXT も許すと、文字だけ返って画像が欠けることがあるため)
+    config = types.GenerateContentConfig(response_modalities=["IMAGE"])
+    debug = settings.image_debug_log
+    log_image_request(debug, "エージェントの画像生成", settings.image_model, prompt, config)
+    try:
+        response = client.models.generate_content(
+            model=settings.image_model,
+            contents=prompt,
+            config=config,
+        )
+    except Exception as exc:
+        log_image_error(debug, "エージェントの画像生成", exc)
+        raise
+    log_image_response(debug, "エージェントの画像生成", response)
 
     candidates = response.candidates or []
     parts = (candidates[0].content.parts or []) if candidates and candidates[0].content else []

@@ -28,6 +28,7 @@ from app.schemas.outfit import OutfitImageResponse, OutfitSuggestion, SuggestedC
 from app.schemas.youtube import VideoInfo
 from app.services.cloth_index import ClothItem
 from app.services.grounding import NO_AFC, clean_list, clean_text, is_quota_error
+from app.services.image_debug import log_image_error, log_image_request, log_image_response
 from app.services.media import build_file_name, get_media_client, save_media
 from app.services.venue import VenueFormat, VenueLookup, get_venue_info, lookup_venue_info
 from app.services.wardrobe_registry import to_registered
@@ -410,28 +411,31 @@ class OutfitService:
         client = self._get_client()
         model = self._settings.image_model
         timeout = self._settings.media_generation_timeout
+        contents = [types.Content(role="user", parts=build_image_parts(mannequin, photos))]
+        config = types.GenerateContentConfig(
+            # テキストは許さない(テキストだけで終わり画像が返らないことがあったため)
+            response_modalities=["IMAGE"],
+            automatic_function_calling=NO_AFC,
+        )
+        debug = self._settings.image_debug_log
+        log_image_request(debug, "コーデ画像", model, contents, config)
         try:
             async with asyncio.timeout(timeout):
                 response = await client.aio.models.generate_content(
-                    model=model,
-                    contents=[
-                        types.Content(role="user", parts=build_image_parts(mannequin, photos))
-                    ],
-                    config=types.GenerateContentConfig(
-                        # テキストは許さない(テキストだけで終わり画像が返らないことがあったため)
-                        response_modalities=["IMAGE"],
-                        automatic_function_calling=NO_AFC,
-                    ),
+                    model=model, contents=contents, config=config
                 )
         except TimeoutError as exc:
+            log_image_error(debug, "コーデ画像", exc)
             raise OutfitTimeoutError(
                 f"画像の生成が {timeout:g} 秒以内に終わりませんでした。"
                 "時間をおいて再度お試しください。"
             ) from exc
         except Exception as exc:
+            log_image_error(debug, "コーデ画像", exc)
             logger.warning("コーデの画像の生成に失敗しました: %s", type(exc).__name__)
             raise _to_error(exc, "画像の生成") from exc
 
+        log_image_response(debug, "コーデ画像", response)
         image = extract_image(response)
         if image is None:
             # 同じ入力でも時々画像が返らないことがある(T-08)。原因を追えるよう終了理由を残す

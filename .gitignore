@@ -22,6 +22,9 @@ docs/screenshot/
 # --- 画面の参考 UI(spec 015。ローカル専用) ---
 tadasii/
 
+# --- 分析後の画像置き場 --- (ローカル)
+backend/tests/sample_cloth_indexs/images
+
 # --- エージェントの生成物(画像・動画) ---
 backend/app/created_images/
 backend/app/created_videos/

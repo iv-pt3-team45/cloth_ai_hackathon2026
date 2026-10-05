@@ -17,7 +17,7 @@
 ```
 ユーザー「富士山の画像を作って」
   → LlmAgent が generate_image ツールを選択(Function Calling)
-      → genai.Client.models.generate_content(image_model, response_modalities=[TEXT, IMAGE])
+      → genai.Client.models.generate_content(image_model, response_modalities=[IMAGE])
       → inline_data(バイト列)を app/created_images/ に保存
       → {"status":"ok","file_name":"...","path":"..."} を返す
   → モデルがツール結果を読み、保存先を含めた文章で応答
@@ -74,6 +74,8 @@ backend ディレクトリ基準の絶対パスに解決する(実行時のカ�
 - 動画生成は数十秒かかる。CLI は応答を待つだけだが、タイムアウトを設定で持つ。
 - 保存ディレクトリは実行時に作成する(`mkdir(parents=True, exist_ok=True)`)。
 - 生成物は Git 管理外にする(`.gitignore`)。
+- **一時的なデバッグ用**: 設定 `IMAGE_DEBUG_LOG`(既定 true)の間は、画像生成に送るプロンプトと応答の全文(API のエラーならその全文)をログに出す
+  (`app/services/image_debug.py`。画像のバイト列は形式と大きさだけ。spec 011 のコーデ画像と共通。2026-10-05)。
 
 ## 6. テスト方針
 
