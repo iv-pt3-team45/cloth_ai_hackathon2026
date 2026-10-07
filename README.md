@@ -352,7 +352,7 @@ YOUTUBE_DATA_API_KEY=<作成したキー>
 - Docker Compose は `backend/.env` を `env_file` で読むため、追加の設定は不要。
 - キーはリクエストヘッダ(`X-Goog-Api-Key`)で送る。URL のクエリに載せるとリクエストログに残るため。
 - **クォータ**: 既定は 1 日 10,000 ユニット。動画情報の取得は 1 回 1 ユニット、**検索は 1 回 100 ユニット**(= 1 日およそ 100 回)。
-- デプロイ時に Secret Manager へ移すかは未決(spec 007 の未決事項 1)。
+- 本番(Cloud Run)では、Secret Manager の `youtube-data-api-key` から渡す(4.13)。
 
 ---
 
@@ -828,6 +828,80 @@ curl -s -X POST http://localhost:8000/api/v1/outfit/image -H "Content-Type: appl
 ```
 
 応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. (会場の形態は [docs/spec/014-venue-info/design.md](docs/spec/014-venue-info/design.md) の 3.)を参照。
+
+### 4.13 本番環境(Cloud Run / Firebase Hosting)へのデプロイ
+
+**main にマージすると、自動で本番に反映される**(spec 035)。手動でのデプロイは基本的に不要。
+
+| 対象 | 公開 URL |
+| --- | --- |
+| 画面(Firebase Hosting) | https://ai-agent-hackathon-508804.web.app |
+| API(Cloud Run `cloth-ai-agent`) | https://cloth-ai-agent-872278396120.asia-northeast1.run.app(API の一覧は `/docs`) |
+
+**自動デプロイの流れ**
+
+```
+PR を main にマージ
+  └─ CI(.github/workflows/ci.yml)が成功
+       └─ Deploy(.github/workflows/deploy.yml)
+            ├─ backend : Cloud Run にデプロイ → /api/v1/health を確認
+            └─ frontend: backend が成功したら、flutter build web → Firebase Hosting にデプロイ
+```
+
+- CI が失敗したら Deploy は動かない。PR の段階では動かない(main へのマージ後だけ)。
+- GitHub から GCP への認証は Workload Identity 連携(鍵ファイルは使わない。main ブランチからだけ認証できる)。
+- 手動で動かしたいときは、GitHub の Actions タブ → Deploy → Run workflow(main を選ぶ)。
+
+**失敗したときの確認場所**
+
+- GitHub の Actions タブ → Deploy → 失敗したジョブのログ。
+- backend のビルドの失敗は、ログに出る Cloud Build の URL、または `gcloud builds list --region asia-northeast1` で確認する。
+- アプリのエラーは、GCP コンソールの Cloud Run → `cloth-ai-agent` → ログ。
+
+**ロールバック(前のバージョンに戻す)**
+
+```bash
+# backend: リビジョンの一覧を見て、前のリビジョンに 100% 戻す
+gcloud run revisions list --service cloth-ai-agent --region asia-northeast1
+gcloud run services update-traffic cloth-ai-agent --region asia-northeast1 --to-revisions <前のリビジョン名>=100
+```
+
+- frontend: Firebase コンソール → Hosting → リリース履歴 → 前のリリースの「ロールバック」。
+- 戻したあとは、原因のコミットを main で revert して改めて自動デプロイする(revert した時点で最新の状態に戻る)。
+
+**手動でデプロイする場合(普段は不要)**
+
+自動デプロイと同じ設定。リポジトリのルートで実行する。Windows の PowerShell では `gcloud` の代わりに `gcloud.cmd` を使う(実行ポリシーで `gcloud.ps1` が止められるため)。
+
+```bash
+gcloud run deploy cloth-ai-agent --source backend --region asia-northeast1 --project ai-agent-hackathon-508804 \
+  --port 8000 --allow-unauthenticated --service-account 872278396120-compute@developer.gserviceaccount.com \
+  --max-instances 1 --min-instances 0 --timeout 600 --memory 1Gi --cpu 1 \
+  --env-vars-file backend/env.deploy.yaml --set-secrets YOUTUBE_DATA_API_KEY=youtube-data-api-key:latest
+```
+
+- アップロードされるファイルは `backend/.gcloudignore` で絞っている(`.env` などは送らない)。実行前に `gcloud meta list-files-for-upload backend` で確認できる。
+- 本番の環境変数は `backend/env.deploy.yaml`。本番で既定値から変える値だけを書く(秘密情報は書かない)。
+
+**秘密情報(YouTube の API キー)**
+
+本番では Secret Manager の `youtube-data-api-key` から渡している。キーを差し替えるときは、新しいバージョンを追加すれば次のデプロイから使われる(コマンドの履歴にキーを残さないよう、ファイル経由で渡す)。
+
+```bash
+gcloud secrets versions add youtube-data-api-key --data-file=<キーだけを書いたファイル> --project ai-agent-hackathon-508804
+```
+
+**注意点**
+
+- **登録した手持ちの服は、デプロイのたび(と、しばらくアクセスが無くてサーバーが止まったとき)に消える。** 保存先が Cloud Run のサーバーの中のため。Cloud Storage への移行までは、デモの直前に登録し直す。
+- しばらくアクセスが無いと、最初の 1 回は起動に数秒かかる(最小インスタンス数 0 のため)。**デモ当日だけ**、次のコマンドで常に 1 台起動しておける(その間は費用がかかるので、終わったら 0 に戻す)。
+
+```bash
+gcloud run services update cloth-ai-agent --region asia-northeast1 --min-instances 1   # デモ前
+gcloud run services update cloth-ai-agent --region asia-northeast1 --min-instances 0   # デモ後
+```
+
+- サーバーは最大 1 台(登録した服がサーバーごとに分かれないようにするため)。
 
 ---
 

@@ -1,0 +1,25 @@
+# `gcloud run deploy --source backend` でアップロードしないファイル(spec 035)。
+# このファイルが無いと backend/ の中身がすべてアップロードされる(.env も含む)ため、必ず置いておく。
+
+# このファイル自身と Git の管理情報
+.gcloudignore
+.git
+.gitignore
+
+# 秘密情報(YouTube の API キーなど)。本番では Secret Manager から渡す
+.env
+.env.*
+!.env.example
+
+# 仮想環境・キャッシュ(コンテナの中で作り直すため不要)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 手元で登録した服・生成した画像や動画(個人のデータを本番に持ち込まない)
+data/
+app/created_images/
+app/created_videos/

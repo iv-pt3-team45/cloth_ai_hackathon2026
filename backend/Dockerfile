@@ -13,13 +13,12 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # 依存だけ先に解決してレイヤキャッシュを効かせる
+# (Cloud Build の既定のビルド方式は BuildKit ではないため、RUN --mount=type=cache は使わない。spec 035)
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project
 
 COPY . .
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen
+RUN uv sync --frozen
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
