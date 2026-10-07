@@ -1,7 +1,7 @@
 # 実装タスク: Cloud Run / Firebase への自動デプロイ(F33・F35〜F37)
 
 - 対応する設計: `./design.md`
-- 進捗: 4 / 14
+- 進捗: 11 / 14
 
 ## 凡例
 
@@ -38,17 +38,17 @@
 
 ### フェーズ 2: backend の自動デプロイ(F35)
 
-- [ ] **T-05: デプロイ用サービスアカウントを作成する**【清水】
+- [x] **T-05: デプロイ用サービスアカウントを作成する**【清水】
   - 内容: `github-deployer` を作成し、design.md 6.4 のロールを付ける(`iam.serviceAccountUser` は実行用サービスアカウントだけ、`storage.objectAdmin` はソースのアップロード先のバケットだけを対象にする)
   - 完了条件: `gcloud.cmd projects get-iam-policy` 等で、design.md 6.4 のとおりに付いている
   - 関連 AC: AC-3
 
-- [ ] **T-06: Workload Identity 連携を設定する**【清水】
+- [x] **T-06: Workload Identity 連携を設定する**【清水】
   - 内容: プール `github-pool`・プロバイダ `github-provider` を作成し、リポジトリと main ブランチの条件を付ける。`github-deployer` に、このリポジトリからの成りすましを許可する
   - 完了条件: プロバイダの条件が design.md 6.5 と一致している。組織ポリシーで作成できない場合は、ここで止めてサポーターに相談する
   - 関連 AC: AC-5
 
-- [ ] **T-07: `deploy.yml`(backend ジョブ)を作成する**【Claude】
+- [x] **T-07: `deploy.yml`(backend ジョブ)を作成する**【Claude】
   - 変更対象: `.github/workflows/deploy.yml`(新規)
   - 内容: design.md 6.6 のとおり、CI の成功後(と手動実行)に、認証 → `gcloud run deploy` → ヘルスチェックを行う
   - 完了条件: ワークフローのファイルが構文的に正しい(GitHub の画面でエラーが出ない)。実際の動作確認は T-11
@@ -56,18 +56,19 @@
 
 ### フェーズ 3: frontend の Firebase デプロイ(F37)
 
-- [ ] **T-08: 既存の GCP プロジェクトに Firebase を追加する**【清水】
+- [x] **T-08: 既存の GCP プロジェクトに Firebase を追加する**【清水】
   - 内容: Firebase コンソールで `ai-agent-hackathon-508804` を選んで Firebase を追加し、Hosting を有効にする
   - 完了条件: Hosting の既定のサイト(`ai-agent-hackathon-508804.web.app`)が作られている
   - 関連 AC: AC-6
 
-- [ ] **T-09: `firebase.json` / `.firebaserc` を作成する**【Claude】
+- [x] **T-09: `firebase.json` / `.firebaserc` を作成する**【Claude】
   - 変更対象: `frontend/firebase.json`、`frontend/.firebaserc`(新規)
   - 内容: design.md 5 のとおり。手元に Node.js があれば、一度手動で `firebase deploy` して画面が出ることを確認する(無ければ T-11 で確認する)
   - 完了条件: ファイルが作成されている。手動で確認できた場合は Firebase の URL で画面が表示される
+  - 実施メモ(2026-10-07): 手元に Node.js が無いため手動デプロイは省略。画面の確認は T-11・T-12 で行う
   - 関連 AC: AC-6
 
-- [ ] **T-10: `deploy.yml` に frontend ジョブを追加する**【Claude】
+- [x] **T-10: `deploy.yml` に frontend ジョブを追加する**【Claude】
   - 内容: backend ジョブの成功後に、Flutter のビルド(`API_BASE_URL` = Cloud Run の URL)→ 認証 → `firebase deploy --only hosting` を行う
   - 完了条件: ワークフローのファイルが構文的に正しい。実際の動作確認は T-11
   - 関連 AC: AC-6
@@ -89,7 +90,7 @@
   - 完了条件: 手順どおりに戻せる
   - 関連 AC: AC-8
 
-- [ ] **T-14: README を更新する**【Claude】
+- [x] **T-14: README を更新する**【Claude】
   - 変更対象: `README.md`
   - 内容: 自動デプロイの流れ、公開 URL、失敗時の確認方法、ロールバック手順、デモ当日に最小インスタンス数を 1 にする方法を書く
   - 完了条件: チームメンバーが README だけで流れと対処が分かる

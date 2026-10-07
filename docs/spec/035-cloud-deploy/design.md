@@ -2,7 +2,7 @@
 
 - 対応する要件: `./requirements.md`
 - ステータス: approved
-- 更新日: 2026-10-07
+- 更新日: 2026-10-07(T-05 でデプロイ用の権限を追記)
 
 ## 1. 設計方針
 
@@ -94,7 +94,9 @@ PR を main にマージ
 | `roles/run.developer` | プロジェクト | Cloud Run のサービスを更新する |
 | `roles/iam.serviceAccountUser` | 実行用サービスアカウントのみ | 「実行用サービスアカウントで動くサービス」をデプロイする |
 | `roles/cloudbuild.builds.editor` | プロジェクト | `--source` のビルドを依頼する |
-| `roles/storage.objectAdmin` | ソースのアップロード先のバケットのみ | `--source` でソースコードをアップロードする |
+| `roles/storage.objectAdmin` | バケット `run-sources-ai-agent-hackathon-508804-asia-northeast1` のみ | `--source` でソースコードをアップロードする |
+| `roles/storage.legacyBucketReader` | 同上のバケットのみ | アップロード前にバケットの存在を確認する(`objectAdmin` には含まれないため。T-05 で追加) |
+| `roles/artifactregistry.reader` | リポジトリ `cloud-run-source-deploy`(`asia-northeast1`)のみ | デプロイ時にイメージの保存先を確認する(T-05 で追加) |
 | `roles/serviceusage.serviceUsageConsumer` | プロジェクト | gcloud / Firebase CLI が API を呼ぶ |
 | `roles/firebasehosting.admin` | プロジェクト | Firebase Hosting にデプロイする |
 

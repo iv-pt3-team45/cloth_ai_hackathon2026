@@ -1,0 +1,140 @@
+name: Deploy
+
+# main の CI(ci.yml)が成功したら、本番(Cloud Run / Firebase Hosting)へデプロイする(spec 035)。
+# - GCP への認証は Workload Identity 連携。サービスアカウントキー(鍵ファイル)は使わない。
+# - ここに書いている値(プロジェクト ID・プロバイダ名・サービスアカウントのメールアドレス・URL)は
+#   秘密ではない。API キーなどの秘密情報は Secret Manager にあり、このファイルには書かない。
+# - workflow_run は、このファイルが main に入って初めて動く。
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # GitHub の画面(Actions → Deploy → Run workflow)から手動でも実行できる。main のときだけ動く
+  workflow_dispatch:
+
+# 許可するのは「コードを読む」と「GCP に渡すトークンを発行する」だけ
+permissions:
+  contents: read
+  id-token: write
+
+# デプロイは 1 つずつ順番に行う(途中のデプロイはキャンセルしない)
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ai-agent-hackathon-508804
+  REGION: asia-northeast1
+  SERVICE: cloth-ai-agent
+  # Cloud Run のアプリが動くときのサービスアカウント(既定の Compute Engine サービスアカウント)
+  RUNTIME_SA: 872278396120-compute@developer.gserviceaccount.com
+  # GitHub Actions がデプロイに使うサービスアカウントと、Workload Identity 連携のプロバイダ
+  DEPLOYER_SA: github-deployer@ai-agent-hackathon-508804.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/872278396120/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+
+jobs:
+  backend:
+    name: backend (Cloud Run)
+    # main への push による CI が成功したとき、または main での手動実行のときだけ
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # CI が検証したのと同じコミットをデプロイする
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # 設定は手動デプロイ(spec 035 tasks.md T-04)と同じ。backend/.gcloudignore でアップロード対象を絞る
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --source backend \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --port 8000 \
+            --allow-unauthenticated \
+            --service-account "$RUNTIME_SA" \
+            --max-instances 1 \
+            --min-instances 0 \
+            --timeout 600 \
+            --memory 1Gi \
+            --cpu 1 \
+            --env-vars-file backend/env.deploy.yaml \
+            --set-secrets YOUTUBE_DATA_API_KEY=youtube-data-api-key:latest \
+            --quiet
+
+      # 起動直後は応答が遅いことがあるため、数回までやり直す
+      - name: Health check
+        run: |
+          url="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
+          echo "Service URL: $url"
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 "$url/api/v1/health"; then
+              echo
+              echo "OK"
+              exit 0
+            fi
+            echo "retry $i ..."
+            sleep 10
+          done
+          echo "ヘルスチェックに失敗しました" >&2
+          exit 1
+
+  frontend:
+    name: frontend (Firebase Hosting)
+    # backend のデプロイとヘルスチェックが成功したときだけ(画面だけ新しくなり API が古いまま、を防ぐ)
+    needs: backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # 画面から呼ぶ Cloud Run の URL(公開情報)。ビルド時に埋め込む
+      API_BASE_URL: https://cloth-ai-agent-872278396120.asia-northeast1.run.app
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # CI(ci.yml)と同じ版の Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.9"
+          channel: stable
+          cache: true
+
+      - name: Build web
+        run: flutter build web --release --dart-define=API_BASE_URL="$API_BASE_URL"
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Firebase CLI は版を固定する(更新でデプロイが突然壊れるのを防ぐ)。公開されるのは build/web だけ
+      - name: Deploy to Firebase Hosting
+        run: npx --yes firebase-tools@15 deploy --only hosting --project "$PROJECT_ID" --non-interactive
