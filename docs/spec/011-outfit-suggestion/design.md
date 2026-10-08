@@ -218,7 +218,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 | --- | --- | --- |
 | `outfit_model` | `gemini-3.5-flash-lite` | 提案に使うモデル(未決事項 1 の決定: `GEMINI_MODEL` とは別に設ける) |
 | `outfit_timeout` | `120` | 提案の待ち時間の上限(秒) |
-| `outfit_mannequin_path` | `app/assets/white_manekin.jpeg` | マネキン画像(backend/ からの相対) |
+| `outfit_mannequin_path` | `app/assets/white_manekin_9vs16.jpg` | マネキン画像(backend/ からの相対)。2026-10-08 に縦長(9:16、768×1376)の画像に変更。元の横長の `white_manekin.jpeg` は残している |
 | `venue_info_timeout` | `30` | 提案の前に会場の形態(spec 014)を調べる待ち時間の上限(秒)。超えたら形態なしで提案する |
 | `image_model` / `media_generation_timeout` | (既存) | 画像の生成に使うモデルと、待ち時間の上限 |
 

@@ -1,7 +1,125 @@
 {
-  "generated_at": "2026-10-05T09:23:33+00:00",
-  "model": "",
+  "generated_at": "2026-10-08T04:39:29+00:00",
+  "model": "gemini-3.5-flash-lite",
   "source_dir": "app",
-  "count": 0,
-  "entries": []
+  "count": 4,
+  "entries": [
+    {
+      "image": "cloth-20261008-043929-08b004.jpg",
+      "items": [
+        {
+          "category": "Tシャツ",
+          "material": "綿",
+          "shape": "半袖クルーネック",
+          "colors": [
+            "黒"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "シンプルで無地のブラックTシャツ",
+          "seasons": [
+            "春",
+            "夏"
+          ],
+          "warmth": "薄手",
+          "occasions": [
+            "普段着",
+            "スポーツ・アウトドア"
+          ],
+          "id": "0397f81537e8"
+        }
+      ],
+      "summary": "木目の床に置かれた黒の無地Tシャツです。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-08T04:39:29+00:00"
+    },
+    {
+      "image": "cloth-20261008-043929-095653.jpg",
+      "items": [
+        {
+          "category": "Tシャツ",
+          "material": "綿",
+          "shape": "半袖クルーネック",
+          "colors": [
+            "白"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "シンプルな無地の白いTシャツ",
+          "seasons": [
+            "春",
+            "夏",
+            "秋"
+          ],
+          "warmth": "薄手",
+          "occasions": [
+            "普段着"
+          ],
+          "id": "1e52a6a22a2e"
+        }
+      ],
+      "summary": "白い無地の半袖クルーネックTシャツが1枚置かれています。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-08T04:39:29+00:00"
+    },
+    {
+      "image": "cloth-20261008-043929-36d57a.jpg",
+      "items": [
+        {
+          "category": "デニムパンツ",
+          "material": "デニム",
+          "shape": "スキニー",
+          "colors": [
+            "ブラック"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "ウォッシュ加工が施された黒のスキニーデニムパンツ",
+          "seasons": [
+            "春",
+            "夏",
+            "秋",
+            "冬"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着"
+          ],
+          "id": "81a08f0a292b"
+        }
+      ],
+      "summary": "ブラックのスキニーデニムパンツが1点写っています。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-08T04:39:29+00:00"
+    },
+    {
+      "image": "cloth-20261008-043929-efe5e0.jpg",
+      "items": [
+        {
+          "category": "チノパン",
+          "material": "綿",
+          "shape": "ストレート",
+          "colors": [
+            "ベージュ"
+          ],
+          "pattern": "無地",
+          "style": "カジュアル",
+          "notes": "フロントポケットとベルトループ付きの定番デザイン",
+          "seasons": [
+            "春",
+            "秋"
+          ],
+          "warmth": "普通",
+          "occasions": [
+            "普段着",
+            "きれいめ"
+          ],
+          "id": "eaab27a7226d"
+        }
+      ],
+      "summary": "白いテーブルの上に綺麗に畳まれたベージュのチノパンが置かれている。",
+      "model": "gemini-3.5-flash-lite",
+      "analyzed_at": "2026-10-08T04:39:29+00:00"
+    }
+  ]
 }
