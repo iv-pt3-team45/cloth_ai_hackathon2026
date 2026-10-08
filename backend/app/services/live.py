@@ -29,6 +29,7 @@ from app.services.grounding import (
     is_quota_error,
     valid_indices,
 )
+from app.services.input_guard import UNTRUSTED_INPUT_RULE, ensure_safe, wrap_user_input
 from app.services.media import get_media_client
 
 logger = logging.getLogger(__name__)
@@ -122,7 +123,8 @@ def build_research_prompt(
 ) -> str:
     """1. 調べる のプロンプト。今日の日付を渡し、天気が実績か予報かを判断させる。"""
     if artist:
-        artist_line = f"{artist}(このアーティストの公演だけを対象にしてください)"
+        # 利用者の入力は区切って、データとして扱わせる(spec 036)
+        artist_line = f"{wrap_user_input(artist)}(このアーティストの公演だけを対象にしてください)"
     else:
         artist_line = "指定なし(条件からアーティストも特定してください)"
     items = [] if artist else ["アーティスト名"]
@@ -146,7 +148,7 @@ def build_research_prompt(
 
 # 条件
 - アーティスト: {artist_line}
-- ライブ情報: {query or "指定なし"}
+- ライブ情報: {wrap_user_input(query) if query else "指定なし"}
 - 公演日: {date.isoformat() if date else "指定なし"}
 - 今日の日付: {today.isoformat()}(日本時間)
 
@@ -154,6 +156,7 @@ def build_research_prompt(
 {numbered}
 
 条件に当てはまる公演が見つからなければ「見つかりませんでした」とその理由を書いてください。
+{UNTRUSTED_INPUT_RULE}
 Web で確認できた内容だけを書き、分からない項目は「不明」と書いてください。推測で埋めないでください。
 """
 
@@ -289,6 +292,8 @@ class LiveService:
         self, query: str, date: dt.date | None, artist: str | None
     ) -> LiveSearchResponse:
         """条件に合うライブを最大 3 件、当日の天気とともに返す。"""
+        # 不審な言い回しは Gemini を呼ぶ前に断る(spec 036)
+        ensure_safe(query, "ライブ情報", "live/search")
         artist = (artist or "").strip() or None
         try:
             client = self._client or get_media_client()

@@ -8,6 +8,7 @@ import pytest
 from google.genai import errors
 
 from app.services import live
+from app.services.input_guard import UNTRUSTED_INPUT_RULE
 from app.services.live import (
     FORECAST_HORIZON_DAYS,
     LiveSearchError,
@@ -35,7 +36,9 @@ def test_prompt_limits_to_known_artist() -> None:
     """AC-7: アーティストが分かっていれば、その公演だけを対象にし、名前は調べさせない。"""
     prompt = build_research_prompt("電光石火", None, "YOASOBI", TODAY)
 
-    assert "YOASOBI(このアーティストの公演だけを対象にしてください)" in prompt
+    assert (
+        "<user_input>YOASOBI</user_input>(このアーティストの公演だけを対象にしてください)" in prompt
+    )
     assert "アーティスト名\n" not in prompt
     assert "1. ライブ名" in prompt
 
@@ -161,6 +164,17 @@ async def test_search_returns_up_to_three_candidates() -> None:
     assert result.search_suggestions_html == SUGGESTIONS_HTML
     assert len(result.sources) == 2
     assert result.model == "test-model"
+
+
+async def test_search_wraps_user_input_and_tells_model_not_to_follow_it() -> None:
+    """spec 036 AC-5: 利用者の入力は区切り、中の指示に従わないよう指示する。"""
+    client = make_client()
+
+    await make_service(client).search("電光石火", None, "YOASOBI")
+
+    research_call = next(c for c in calls_of(client) if uses_search(c))
+    assert "- ライブ情報: <user_input>電光石火</user_input>" in research_call["contents"]
+    assert UNTRUSTED_INPUT_RULE in research_call["contents"]
 
 
 async def test_search_omits_artist_when_known() -> None:

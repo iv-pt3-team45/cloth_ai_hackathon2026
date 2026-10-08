@@ -1,4 +1,7 @@
-"""Agent ADK を用いたチャットエンドポイント。"""
+"""Agent ADK を用いたチャットエンドポイント。
+
+今は閉じている(`app/api/router.py` に登録していない。spec 036)。
+"""
 
 from typing import Annotated
 

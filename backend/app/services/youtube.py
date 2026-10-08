@@ -15,6 +15,7 @@ import httpx
 
 from app.core.config import Settings, get_settings
 from app.schemas.youtube import LookupResponse, VideoCandidate, VideoInfo
+from app.services.input_guard import ensure_safe
 from app.services.mv_title import parse_title
 
 logger = logging.getLogger(__name__)
@@ -207,6 +208,8 @@ class YouTubeService:
 
     async def lookup(self, query: str) -> LookupResponse:
         """URL なら動画情報を、MV 名なら検索結果の候補を返す。"""
+        # 不審な言い回しは YouTube を呼ぶ前に断る(spec 036)
+        ensure_safe(query, "MV の入力", "youtube/lookup")
         video_id = extract_video_id(query)
         if video_id is not None:
             return LookupResponse(input_type="url", video=await self.get_video(video_id))
