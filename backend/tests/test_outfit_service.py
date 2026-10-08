@@ -67,7 +67,7 @@ def test_prompt_includes_all_context(tmp_path: Path) -> None:
 
 
 def test_prompt_wraps_owned_clothes_as_user_data(tmp_path: Path) -> None:
-    """spec 036 AC-5: 利用者が修正できる服の属性は区切り、指示に従わないよう指示する。"""
+    """spec 037 AC-5: 利用者が修正できる服の属性は区切り、指示に従わないよう指示する。"""
     settings = make_settings(tmp_path)
     ids = register_clothes(settings)
     owned = load_owned(LocalWardrobeStore(settings.cloth_index_file))

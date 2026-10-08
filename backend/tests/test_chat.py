@@ -1,4 +1,4 @@
-"""チャット API は閉じている(spec 036)。エージェント自体のテストは test_agent.py。"""
+"""チャット API は閉じている(spec 037)。エージェント自体のテストは test_agent.py。"""
 
 from fastapi.testclient import TestClient
 

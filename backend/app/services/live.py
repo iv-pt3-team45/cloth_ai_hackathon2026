@@ -123,7 +123,7 @@ def build_research_prompt(
 ) -> str:
     """1. 調べる のプロンプト。今日の日付を渡し、天気が実績か予報かを判断させる。"""
     if artist:
-        # 利用者の入力は区切って、データとして扱わせる(spec 036)
+        # 利用者の入力は区切って、データとして扱わせる(spec 037)
         artist_line = f"{wrap_user_input(artist)}(このアーティストの公演だけを対象にしてください)"
     else:
         artist_line = "指定なし(条件からアーティストも特定してください)"
@@ -292,7 +292,7 @@ class LiveService:
         self, query: str, date: dt.date | None, artist: str | None
     ) -> LiveSearchResponse:
         """条件に合うライブを最大 3 件、当日の天気とともに返す。"""
-        # 不審な言い回しは Gemini を呼ぶ前に断る(spec 036)
+        # 不審な言い回しは Gemini を呼ぶ前に断る(spec 037)
         ensure_safe(query, "ライブ情報", "live/search")
         artist = (artist or "").strip() or None
         try:

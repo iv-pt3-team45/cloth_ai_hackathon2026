@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(UnsafeInputError)
     async def unsafe_input(request: Request, exc: UnsafeInputError) -> JSONResponse:
-        # 利用者の入力に不審な言い回しがあった(spec 036)。理由を 400 で返す
+        # 利用者の入力に不審な言い回しがあった(spec 037)。理由を 400 で返す
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
     return app

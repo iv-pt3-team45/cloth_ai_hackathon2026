@@ -208,7 +208,7 @@ class YouTubeService:
 
     async def lookup(self, query: str) -> LookupResponse:
         """URL なら動画情報を、MV 名なら検索結果の候補を返す。"""
-        # 不審な言い回しは YouTube を呼ぶ前に断る(spec 036)
+        # 不審な言い回しは YouTube を呼ぶ前に断る(spec 037)
         ensure_safe(query, "MV の入力", "youtube/lookup")
         video_id = extract_video_id(query)
         if video_id is not None:

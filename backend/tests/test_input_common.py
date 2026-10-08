@@ -1,4 +1,4 @@
-"""入力の共通チェック(spec 036 の B)のテスト。外部 API は呼ばない。"""
+"""入力の共通チェック(spec 037 の B)のテスト。外部 API は呼ばない。"""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-"""利用者の入力の不審な言い回しを API で断る(spec 036 の A)テスト。外部 API はフェイク。"""
+"""利用者の入力の不審な言い回しを API で断る(spec 037 の A)テスト。外部 API はフェイク。"""
 
 from pathlib import Path
 

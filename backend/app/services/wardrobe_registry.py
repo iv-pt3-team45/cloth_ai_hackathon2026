@@ -122,7 +122,7 @@ def to_registered(entry: StoredEntry) -> list[RegisteredCloth]:
     ]
 
 
-# 保存する服の文字の項目と、断るときの理由に出す名前(spec 036)
+# 保存する服の文字の項目と、断るときの理由に出す名前(spec 037)
 _TEXT_FIELDS = {
     "category": "種類",
     "material": "素材",

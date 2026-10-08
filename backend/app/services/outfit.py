@@ -64,7 +64,7 @@ _SUGGEST_INSTRUCTION = """\
   (使う場面が「ライブ・フェス」の服を優先する)。
 - reason(服ごとの理由)と points(全体のポイント)は具体的に書くこと。日本語で書くこと。
 """
-# 手持ちの服の属性は利用者が修正できるため、データとして扱わせる(spec 036)
+# 手持ちの服の属性は利用者が修正できるため、データとして扱わせる(spec 037)
 _SUGGEST_INSTRUCTION += f"- {UNTRUSTED_INPUT_RULE}\n"
 
 

@@ -167,7 +167,7 @@ async def test_search_returns_up_to_three_candidates() -> None:
 
 
 async def test_search_wraps_user_input_and_tells_model_not_to_follow_it() -> None:
-    """spec 036 AC-5: 利用者の入力は区切り、中の指示に従わないよう指示する。"""
+    """spec 037 AC-5: 利用者の入力は区切り、中の指示に従わないよう指示する。"""
     client = make_client()
 
     await make_service(client).search("電光石火", None, "YOASOBI")

@@ -126,7 +126,7 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 
 ### 2.3 リクエストの流れ(チャット機能の例)
 
-> チャット API(`POST /api/v1/chat`)は spec 036 で閉じている(画面からも外している)。下は API を開いていたときの流れで、エージェントの処理は CLI(4.3)と同じ。
+> チャット API(`POST /api/v1/chat`)は spec 037 で閉じている(画面からも外している)。下は API を開いていたときの流れで、エージェントの処理は CLI(4.3)と同じ。
 
 ```
 ユーザー入力
@@ -216,7 +216,7 @@ tx_hackathon_gc/
 │       ├── 014-venue-info/
 │       ├── 015-ui-redesign/
 │       ├── 035-cloud-deploy/
-│       └── 036-input-guard/
+│       └── 037-input-guard/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
 ```
@@ -404,7 +404,7 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 ### 4.3 エージェントを CLI で動かす(サーバ・フロント不要)
 
 プロンプトやツールの試行錯誤は、この CLI が一番速い。API と同じ `AgentService` を通るため、
-チャット API(`POST /api/v1/chat`)は spec 036 で閉じている。開けば(`app/api/router.py` に登録を戻せば)同じ挙動になる。
+チャット API(`POST /api/v1/chat`)は spec 037 で閉じている。開けば(`app/api/router.py` に登録を戻せば)同じ挙動になる。
 
 ```bash
 cd backend
@@ -910,7 +910,7 @@ gcloud run services update cloth-ai-agent --region asia-northeast1 --min-instanc
 
 ### 4.14 利用者の入力のチェック(プロンプトインジェクション対策)
 
-公開した API は認証なしで誰でも呼べるため、利用者の入力を次の 2 段階でチェックする(spec 036)。
+公開した API は認証なしで誰でも呼べるため、利用者の入力を次の 2 段階でチェックする(spec 037)。
 チェックするのは、利用者が文字を打ち込める **① MV 検索・② ライブ検索・③ 服の詳細(保存)** の 3 か所だけ。
 
 **A. 不審な言い回しを断る**(① MV 検索・② ライブ検索・③ 服の属性の修正が対象)
@@ -1061,7 +1061,7 @@ docs/spec/001-user-authentication/
 | [014-venue-info](docs/spec/014-venue-info/) | 会場の形態(スタンディング / 着席 / 混在)の取得とコーデ提案への連携(F14) | 実装中(tasks 17 / 18。T-13 の疎通確認が残り)/ 客席の表示は spec 015 の画面には無い |
 | [015-ui-redesign](docs/spec/015-ui-redesign/) | 画面の作り直し(参考 UI `tadasii/` に合わせた 1 画面の流れ。機能は変えない) | 実装完了(ブラウザで確認済み)/ ユーザーの確認待ち |
 | [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 11 / 14) |
-| [036-input-guard](docs/spec/036-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
+| [037-input-guard](docs/spec/037-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
 
 ---
 
@@ -1184,6 +1184,8 @@ git branch -d feat/001-user-authentication
 | `git switch -` | 直前にいたブランチに戻る |
 | `git branch -d <ブランチ名>` | マージ済みブランチを削除 |
 | `git merge main` | 作業ブランチに main の変更を取り込む |
+| `git branch -m <新しい名前>` | 今いるブランチの名前を変える(spec の番号が他の人と重なったときなど) |
+| `git push origin --delete <ブランチ名>` | GitHub 上のブランチを消す(名前を変えた後の古いブランチ。PR が出ていないことを確かめてから) |
 
 **取り消す**(よく使う順)
 

@@ -6,7 +6,7 @@ from app.api.routes import culture, health, live, outfit, venue, wardrobe, youtu
 
 api_router = APIRouter()
 api_router.include_router(health.router)
-# チャット(エージェント)の API は閉じている(spec 036)。画面で使っておらず、
+# チャット(エージェント)の API は閉じている(spec 037)。画面で使っておらず、
 # 画像・動画の生成ツールで費用がかさむおそれがあるため。
 # 開くときは routes/chat.py の router をここに戻す。エージェントは CLI から使える
 api_router.include_router(youtube.router)

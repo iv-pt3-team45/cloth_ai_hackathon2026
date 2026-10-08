@@ -203,7 +203,7 @@ void main() {
     expect(find.text('条件に合う公演がありません。'), findsOneWidget);
   });
 
-  testWidgets('不審な入力で断られたら、その理由を ② のカードに出す(spec 036 AC-1)', (tester) async {
+  testWidgets('不審な入力で断られたら、その理由を ② のカードに出す(spec 037 AC-1)', (tester) async {
     const reason = 'ライブ情報に、使えない表現(AI への指示のような文)が含まれています。言い回しを変えて入力してください。';
     final live = FakeLiveRepository(
       (request) async =>
