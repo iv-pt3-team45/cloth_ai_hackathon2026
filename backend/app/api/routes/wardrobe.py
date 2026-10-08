@@ -56,7 +56,10 @@ def analyze(payload: AnalyzeRequest, service: Service) -> AnalyzeResponse:
 
 @router.get("/items", response_model=WardrobeListResponse)
 def list_items(service: Service) -> WardrobeListResponse:
-    items = service.list_items()
+    try:
+        items = service.list_items()
+    except WardrobeError as exc:
+        raise _to_http(exc) from exc
     return WardrobeListResponse(items=items, count=len(items))
 
 

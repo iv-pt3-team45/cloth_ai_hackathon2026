@@ -33,10 +33,11 @@ from app.services.media import build_file_name, get_media_client, save_media
 from app.services.venue import VenueFormat, VenueLookup, get_venue_info, lookup_venue_info
 from app.services.wardrobe_registry import to_registered
 from app.services.wardrobe_store import (
-    LocalWardrobeStore,
     StoredCloth,
     StoredEntry,
     WardrobeStore,
+    WardrobeStoreError,
+    create_wardrobe_store,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,8 +114,16 @@ Owned = dict[str, tuple[StoredCloth, StoredEntry]]
 
 
 def load_owned(store: WardrobeStore) -> Owned:
-    """手持ちの服を id → (服, その服が写った写真の記録) にする。"""
-    return {item.id: (item, entry) for entry in store.list_entries() for item in entry.items}
+    """手持ちの服を id → (服, その服が写った写真の記録) にする。
+
+    保存先(Cloud Storage など。spec 036)を読めなければ OutfitError(ルータが 502 にする)。
+    """
+    try:
+        entries = store.list_entries()
+    except (WardrobeStoreError, OSError) as exc:
+        logger.warning("手持ちの服を読み込めませんでした: %s", type(exc).__name__)
+        raise OutfitError(f"手持ちの服を読み込めませんでした: {exc}") from exc
+    return {item.id: (item, entry) for entry in entries for item in entry.items}
 
 
 def describe_item(item: ClothItem) -> str:
@@ -283,9 +292,9 @@ class OutfitService:
         venue_lookup: VenueLookup | None = None,
     ) -> None:
         # store / client / venue_lookup はテストで差し替えるためのもの。
-        # 手持ちの服は spec 010 と同じ保存先
+        # 手持ちの服は spec 010 と同じ保存先(WARDROBE_STORAGE で決まる。spec 036)
         self._settings = settings or get_settings()
-        self._store = store or LocalWardrobeStore(self._settings.cloth_index_file)
+        self._store = store or create_wardrobe_store(self._settings)
         self._client = client
         self._venue_lookup = venue_lookup or get_venue_info
 
@@ -477,7 +486,11 @@ class OutfitService:
 
         photos = []
         for image, labels in labels_by_image.items():
-            found = self._store.read_image(image)
+            try:
+                found = self._store.read_image(image)
+            except (WardrobeStoreError, OSError) as exc:
+                logger.warning("服の写真を読み込めませんでした: %s", type(exc).__name__)
+                raise OutfitError(f"服の写真を読み込めませんでした: {exc}") from exc
             if found is None:
                 raise OutfitError(f"服の写真が見つかりません({image})。")
             photos.append((found[0], found[1], labels))

@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     cloth_index_path: str = "data/wardrobe/index.json"
     # 登録する写真 1 枚の上限(バイト)
     wardrobe_max_image_bytes: int = 10 * 1024 * 1024
+    # 手持ちの服(写真と index.json)の保存先(spec 036)。
+    # local = CLOTH_INDEX_PATH のフォルダ / gcs = Cloud Storage のバケット
+    wardrobe_storage: Literal["local", "gcs"] = "local"
+    # gcs のときのバケット名と、バケットの中の置き場所(接頭辞。末尾の / は付けない)
+    wardrobe_gcs_bucket: str = ""
+    wardrobe_gcs_prefix: str = "wardrobe"
 
     # --- YouTube Data API ---
     # 【例外】API キーを使う。YouTube Data API は ADC の既定スコープ(cloud-platform)では呼べないため

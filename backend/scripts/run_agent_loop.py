@@ -107,7 +107,9 @@ async def run(args: argparse.Namespace) -> int:
     if args.verifier_model:
         overrides["verifier_model"] = args.verifier_model
     if args.index:
+        # 指定したファイルを必ず読む(WARDROBE_STORAGE=gcs でもローカルにする。spec 036)
         overrides["cloth_index_path"] = args.index
+        overrides["wardrobe_storage"] = "local"
     if overrides:
         settings = settings.model_copy(update=overrides)
 

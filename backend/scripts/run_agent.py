@@ -205,7 +205,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.model:
         overrides["gemini_model"] = args.model
     if args.index:
+        # 指定したファイルを必ず読む(WARDROBE_STORAGE=gcs でもローカルにする。spec 036)
         overrides["cloth_index_path"] = args.index
+        overrides["wardrobe_storage"] = "local"
 
     # 設定を差し替えるときだけ AgentService に渡す(既定は共有 Runner を使う)
     if overrides:
