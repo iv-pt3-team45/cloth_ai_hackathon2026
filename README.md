@@ -28,6 +28,15 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 
 > このリポジトリの「正」となるドキュメントは本 README です。構成・手順・方針を変更したら、**同じコミットで README も更新**してください(運用ルールは [CLAUDE.md](CLAUDE.md) 参照)。
 
+## 動作中のアプリ
+
+| 用途 | URL |
+| --- | --- |
+| 画面(ここから使う) | https://ai-agent-hackathon-508804.web.app |
+| API(Cloud Run) | https://cloth-ai-agent-872278396120.asia-northeast1.run.app(API の一覧は `/docs`) |
+
+main にマージすると自動で更新されます(詳細は [4.13](#413-本番環境cloud-run--firebase-hostingへのデプロイ))。
+
 ---
 
 ## 1. 技術スタック
