@@ -5,12 +5,13 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
+from app.schemas.common import GuardedRequest
 from app.schemas.culture import Source
 
 WeatherKind = Literal["actual", "forecast", "not_yet", "unknown"]
 
 
-class LiveSearchRequest(BaseModel):
+class LiveSearchRequest(GuardedRequest):
     query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] = Field(
         default="", description="ライブ名・ツアー名・会場などのキーワード"
     )

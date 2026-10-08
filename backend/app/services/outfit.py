@@ -29,6 +29,7 @@ from app.schemas.youtube import VideoInfo
 from app.services.cloth_index import ClothItem
 from app.services.grounding import NO_AFC, clean_list, clean_text, is_quota_error
 from app.services.image_debug import log_image_error, log_image_request, log_image_response
+from app.services.input_guard import UNTRUSTED_INPUT_RULE, wrap_user_input
 from app.services.media import build_file_name, get_media_client, save_media
 from app.services.venue import VenueFormat, VenueLookup, get_venue_info, lookup_venue_info
 from app.services.wardrobe_registry import to_registered
@@ -64,6 +65,8 @@ _SUGGEST_INSTRUCTION = """\
   (使う場面が「ライブ・フェス」の服を優先する)。
 - reason(服ごとの理由)と points(全体のポイント)は具体的に書くこと。日本語で書くこと。
 """
+# 手持ちの服の属性は利用者が修正できるため、データとして扱わせる(spec 037)
+_SUGGEST_INSTRUCTION += f"- {UNTRUSTED_INPUT_RULE}\n"
 
 
 # 会場の形態をプロンプトに書くときの表記。UNKNOWN は書かない(行ごと足さない)
@@ -224,7 +227,7 @@ def build_suggest_prompt(
     ]
     culture_text = "\n".join(_culture_lines(culture))
     return (
-        f"# 手持ちの服(この中からだけ選ぶ)\n{clothes}\n\n"
+        f"# 手持ちの服(この中からだけ選ぶ)\n{wrap_user_input(clothes, tag='user_data')}\n\n"
         f"# MV\n- 曲名: {video.song_title}\n- アーティスト: {video.artist}\n"
         f"- 動画タイトル: {video.title}\n\n"
         f"# アーティストのカルチャー情報\n{culture_text}\n\n"
