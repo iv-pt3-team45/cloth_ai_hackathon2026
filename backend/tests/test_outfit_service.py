@@ -10,7 +10,9 @@ import pytest
 from google.genai import errors, types
 
 from app.schemas.live import LiveWeather
+from app.services.input_guard import UNTRUSTED_INPUT_RULE
 from app.services.outfit import (
+    _SUGGEST_INSTRUCTION,
     OutfitError,
     OutfitInputError,
     OutfitQuotaError,
@@ -62,6 +64,20 @@ def test_prompt_includes_all_context(tmp_path: Path) -> None:
     assert "- 会場: さいたまスーパーアリーナ(埼玉県さいたま市)" in prompt
     assert "- 日付: 2023-06-03" in prompt
     assert "- 当日の天気: 晴れ / 最高 28.5℃ / 最低 18℃(実績)" in prompt
+
+
+def test_prompt_wraps_owned_clothes_as_user_data(tmp_path: Path) -> None:
+    """spec 037 AC-5: 利用者が修正できる服の属性は区切り、指示に従わないよう指示する。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    owned = load_owned(LocalWardrobeStore(settings.cloth_index_file))
+
+    prompt = build_suggest_prompt(owned, make_video(), make_culture(), make_live())
+
+    clothes = prompt.split("<user_data>", 1)[1].split("</user_data>", 1)[0]
+    assert f"- id={ids['Tシャツ']}: Tシャツ" in clothes
+    assert "# MV" not in clothes
+    assert UNTRUSTED_INPUT_RULE in _SUGGEST_INSTRUCTION
 
 
 def test_prompt_without_culture_and_weather(tmp_path: Path) -> None:

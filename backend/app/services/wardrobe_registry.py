@@ -25,6 +25,7 @@ from app.schemas.wardrobe import (
 )
 from app.services.cloth_index import ClothIndexError, ClothItem, analyze_cloth_bytes, normalize_item
 from app.services.grounding import is_quota_error
+from app.services.input_guard import ensure_safe
 from app.services.wardrobe_store import (
     LocalWardrobeStore,
     StoredEntry,
@@ -121,6 +122,38 @@ def to_registered(entry: StoredEntry) -> list[RegisteredCloth]:
     ]
 
 
+# 保存する服の文字の項目と、断るときの理由に出す名前(spec 037)
+_TEXT_FIELDS = {
+    "category": "種類",
+    "material": "素材",
+    "shape": "形",
+    "pattern": "柄",
+    "style": "系統",
+    "notes": "特徴",
+}
+
+
+def check_attributes(request: RegisterRequest) -> None:
+    """利用者が確認・修正した服の属性に不審な言い回しが無いか確かめる(保存の前に断る)。
+
+    保存された属性はコーデ提案のプロンプトに入るため、一度入ると以後の提案すべてに影響する。
+    項目ごとに確かめたあと、項目に分けて書く(種類に「前の指示」、特徴に「を無視して」)すり抜けを防ぐため、
+    すべての項目をつないだ文でも確かめる。
+    """
+    api = "wardrobe/items"
+    values: list[str] = []
+    for attributes in request.items:
+        for field, label in _TEXT_FIELDS.items():
+            value = getattr(attributes, field)
+            ensure_safe(value, f"服の{label}", api)
+            values.append(value)
+        for color in attributes.colors:
+            ensure_safe(color, "服の色", api)
+            values.append(color)
+    ensure_safe(request.summary, "写真の説明", api)
+    ensure_safe(" ".join([*values, request.summary]), "服の属性", api)
+
+
 class WardrobeService:
     """手持ちの服の登録のユースケースを担うサービス層。"""
 
@@ -160,6 +193,7 @@ class WardrobeService:
 
     def register(self, request: RegisterRequest) -> list[RegisteredCloth]:
         """確認・修正した服と写真を保存する。"""
+        check_attributes(request)
         data = decode_image(request.image, self._settings.wardrobe_max_image_bytes)
         items = [to_cloth_item(attributes) for attributes in request.items]
         try:

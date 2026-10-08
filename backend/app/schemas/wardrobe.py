@@ -8,6 +8,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
+from app.schemas.common import GuardedRequest
+
 Season = Literal["春", "夏", "秋", "冬"]
 Warmth = Literal["薄手", "普通", "厚手"]
 # 「きれいめ」は画面と指示では「きれいめ(食事・オフィス)」と説明する
@@ -52,7 +54,7 @@ class AnalyzeResponse(BaseModel):
     model: str = Field(..., description="使用したモデル名")
 
 
-class RegisterRequest(BaseModel):
+class RegisterRequest(GuardedRequest):
     image: WardrobeImage
     items: list[ClothAttributes] = Field(
         ..., min_length=1, max_length=20, description="保存する服(利用者が確認・修正したもの)"
