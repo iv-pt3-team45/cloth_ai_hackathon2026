@@ -53,6 +53,7 @@ main にマージすると自動で更新されます(詳細は [4.13](#413-本�
 | 外部 API | YouTube Data API v3 | MV のメタ情報取得(4.8)。`httpx` で直接呼ぶ。**認証は API キー**(例外。3.4) |
 | 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)・ライブ情報(4.10)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
 | メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4)。画像はコーデ提案でマネキンに服を着せるのにも使う(4.12) |
+| 保存先 | Cloud Storage(`google-cloud-storage`) | 手持ちの服の写真と `index.json`(4.11)。`WARDROBE_STORAGE=gcs` のとき。既定はローカル(3.5。spec 036)。認証は ADC |
 | 実行環境 | Docker Compose | フロント / バックを 1 コマンドで同時起動 |
 | 設定管理 | pydantic-settings / `.env` | 秘匿情報は Git 管理外 |
 | 写真の選択(フロント) | `image_picker` | 手持ちの服の登録(4.11)。Web ではファイル選択、スマホでは写真・カメラ |
@@ -95,6 +96,7 @@ main にマージすると自動で更新されます(詳細は [4.13](#413-本�
 │   app/core/           ── 設定(config) / ロギング                    │
 │   app/services/youtube.py ── YouTube Data API を httpx で直接呼ぶ   │
 │   app/services/culture.py, live.py, outfit.py ── Gemini を直接呼ぶ  │
+│   app/services/wardrobe_gcs.py ── 手持ちの服を Cloud Storage に保存 │
 └──────────────────────────────────┼──────────────────────────────────┘
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -113,6 +115,8 @@ main にマージすると自動で更新されます(詳細は [4.13](#413-本�
 │   Vertex AI ── Gemini (モデルは GEMINI_MODEL で指定)                │
 │   Vertex AI ── Grounding with Google Search / YouTube の動画入力    │
 │              (カルチャー・ライブ情報。culture.py / live.py から)    │
+│   Cloud Storage ── 手持ちの服の写真と index.json                    │
+│              (WARDROBE_STORAGE=gcs のとき。wardrobe_gcs.py から)    │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -185,12 +189,12 @@ tx_hackathon_gc/
 │   │   ├── services/         # agent.py, agent_loop.py, verification.py, media.py,
 │   │   │                     #   cloth_index.py, wardrobe.py, youtube.py, mv_title.py,
 │   │   │                     #   culture.py, live.py, grounding.py,
-│   │   │                     #   wardrobe_store.py, wardrobe_registry.py, outfit.py,
+│   │   │                     #   wardrobe_store.py, wardrobe_gcs.py, wardrobe_registry.py, outfit.py,
 │   │   │                     #   input_guard.py(入力のチェック)ほか
 │   │   ├── assets/           # アプリが使う固定の画像(コーデ画像のマネキン white_manekin_9vs16.jpg。Git 管理)
 │   │   ├── created_images/   # 生成された画像の保存先(Git 管理外)
 │   │   └── created_videos/   # 生成された動画の保存先(Git 管理外)
-│   ├── data/wardrobe/        # 登録した手持ちの服(index.json と images/。Git 管理外)
+│   ├── data/wardrobe/        # 登録した手持ちの服(index.json と images/。Git 管理外。WARDROBE_STORAGE=local のとき)
 │   ├── scripts/
 │   │   ├── run_agent.py      # 対話でエージェントを動かす CLI
 │   │   ├── run_agent_loop.py # 生成 → 検証 → 再生成 を繰り返す CLI
@@ -227,6 +231,7 @@ tx_hackathon_gc/
 │       ├── 014-venue-info/
 │       ├── 015-ui-redesign/
 │       ├── 035-cloud-deploy/
+│       ├── 036-wardrobe-cloud-storage/
 │       └── 037-input-guard/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
@@ -282,8 +287,11 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `VERIFIER_MODEL` | `gemini-3.5-flash-lite` | ループの検証に使うモデル(生成モデルとクォータを分けたいときは別のモデルにする) |
 | `LOOP_MAX_ITERATIONS` | `3` | 生成 → 検証 を繰り返す上限回数 |
 | `CLOTH_INDEX_MODEL` | `gemini-3.5-flash-lite` | 服画像から属性(季節・暖かさ・使う場面を含む)を抽出するモデル |
-| `CLOTH_INDEX_PATH` | `data/wardrobe/index.json` | 登録した手持ちの服のインデックス(4.11)。エージェント(4.7)もここを参照する。写真は同じフォルダの `images/` |
+| `CLOTH_INDEX_PATH` | `data/wardrobe/index.json` | 登録した手持ちの服のインデックス(4.11)。エージェント(4.7)もここを参照する。写真は同じフォルダの `images/`。`WARDROBE_STORAGE=local` のときに使う |
 | `WARDROBE_MAX_IMAGE_BYTES` | `10485760` | 登録する写真 1 枚の上限(10 MB) |
+| `WARDROBE_STORAGE` | `local` | 手持ちの服の保存先。`local`(`CLOTH_INDEX_PATH` のフォルダ)/ `gcs`(Cloud Storage。3.5)。エージェント(4.7)も同じ保存先を読む |
+| `WARDROBE_GCS_BUCKET` | 空 | `gcs` のときのバケット名。本番は `ai-agent-hackathon-508804-wardrobe` |
+| `WARDROBE_GCS_PREFIX` | `wardrobe` | バケットの中の置き場所(接頭辞)。`<接頭辞>/index.json` と `<接頭辞>/images/` に保存する |
 | `YOUTUBE_DATA_API_KEY` | 空 | YouTube Data API v3 の API キー(**秘匿情報**。3.4) |
 | `YOUTUBE_SEARCH_MAX_RESULTS` | `5` | MV 名で検索したときの候補数 |
 | `YOUTUBE_REGION_CODE` | `JP` | 検索結果の地域。空なら指定しない |
@@ -369,6 +377,48 @@ YOUTUBE_DATA_API_KEY=<作成したキー>
 - キーはリクエストヘッダ(`X-Goog-Api-Key`)で送る。URL のクエリに載せるとリクエストログに残るため。
 - **クォータ**: 既定は 1 日 10,000 ユニット。動画情報の取得は 1 回 1 ユニット、**検索は 1 回 100 ユニット**(= 1 日およそ 100 回)。
 - 本番(Cloud Run)では、Secret Manager の `youtube-data-api-key` から渡す(4.13)。
+
+### 3.5 手持ちの服の保存先(ローカル / Cloud Storage)
+
+手持ちの服(4.11)の写真と `index.json` の保存先は、`backend/.env` の `WARDROBE_STORAGE` で切り替える(spec 036)。
+
+| 値 | 保存先 | 使う場面 |
+| --- | --- | --- |
+| `local`(既定) | `backend/data/wardrobe/`(`CLOTH_INDEX_PATH` のフォルダ) | ふだんの開発・テスト・CI。何も設定しなければこちら |
+| `gcs` | `gs://<WARDROBE_GCS_BUCKET>/<WARDROBE_GCS_PREFIX>/`(`index.json` と `images/`) | 本番(Cloud Run)。再デプロイやサーバーの停止でも消えない |
+
+- 保存の形式はどちらも同じ。画面と API の動きも変わらない。エージェント(4.7)の服の参照も同じ保存先を読む(CLI で `--index` を指定したときだけは、そのローカルのファイルを読む)。
+- **pytest は常に `local` で動く**(`tests/conftest.py`)。`.env` を `gcs` にしていても、テストが Cloud Storage を呼ぶことはない。
+- 認証は ADC(3.3)。ローカルから `gcs` を試すときは、自分の Google アカウントにバケットへの読み書きの権限が必要(プロジェクトの編集者なら付いている)。
+- バケットは非公開。写真は backend の API(`GET /api/v1/wardrobe/images/...`)を通して返す。
+
+ローカルから本番と同じバケットを使って試す場合(**本番の服と混ざる**ので、試した服は削除しておく):
+
+```bash
+# backend/.env
+WARDROBE_STORAGE=gcs
+WARDROBE_GCS_BUCKET=ai-agent-hackathon-508804-wardrobe
+```
+
+バケットの作り方(作成済み。作り直すときの記録):
+
+```bash
+# 東京リージョン、非公開、バケット単位の権限管理
+gcloud storage buckets create gs://ai-agent-hackathon-508804-wardrobe \
+  --project ai-agent-hackathon-508804 --location asia-northeast1 \
+  --uniform-bucket-level-access --public-access-prevention
+
+# Cloud Run の実行用サービスアカウントに、このバケットの中身の読み書きだけを許可する
+gcloud storage buckets add-iam-policy-binding gs://ai-agent-hackathon-508804-wardrobe \
+  --member serviceAccount:872278396120-compute@developer.gserviceaccount.com \
+  --role roles/storage.objectUser
+
+# 中身を見る
+gcloud storage ls -r gs://ai-agent-hackathon-508804-wardrobe/
+```
+
+- 削除した写真も 7 日間は復元できる(バケットのソフト削除の既定)。
+- 同時に服を登録しても消えないよう、`index.json` は世代番号を条件にして書き込む(他の処理が先に書いていたら読み直してやり直す)。サーバーが複数台になっても成り立つ。
 
 ---
 
@@ -625,7 +675,8 @@ uv run python scripts/run_agent.py --index tests/sample_cloth_indexs/index.json 
 
 - **呼ぶ判断はモデルに任せている。** 服と無関係な質問(例: 「1+1は?」)ではインデックスを読まない。
 - インデックスが無い場合もエラーにならず、「作成されていない」と応答する。
-- 参照先は `CLOTH_INDEX_PATH`(既定 `data/wardrobe/index.json` = アプリで登録した服)または `--index` で指定する。
+- 参照先は手持ちの服の保存先(3.5。既定はローカルの `data/wardrobe/index.json`、`WARDROBE_STORAGE=gcs` なら Cloud Storage)。
+  `--index` で指定したときは、保存先の設定にかかわらずそのローカルのファイルを読む。
   ツールは呼ばれるたびにファイルを読むため、登録・削除はすぐに反映される。
 - 渡すのは属性テキストのみで、画像そのものは渡さない。
 
@@ -777,9 +828,9 @@ curl -s -X POST http://localhost:8000/api/v1/live/search   -H "Content-Type: app
 | 暖かさ | 薄手 / 普通 / 厚手 から 1 つ |
 | 使う場面 | 普段着 / きれいめ(食事・オフィス) / フォーマル / スポーツ・アウトドア / ライブ・フェス から複数 |
 
-- 保存先は `CLOTH_INDEX_PATH`(既定 `backend/data/wardrobe/index.json`)と、同じフォルダの `images/`。**Git 管理外**。
+- 保存先は既定で `CLOTH_INDEX_PATH`(既定 `backend/data/wardrobe/index.json`)と、同じフォルダの `images/`。**Git 管理外**。
   形式は 4.6 の `index.json` に服ごとの `id` を足したもの。Docker Compose ではホストの `backend/` に残る。
-  Cloud Run などに載せると再起動で消える(将来 Cloud に移す。spec 010 の未決事項 1)。
+  `WARDROBE_STORAGE=gcs` にすると、同じ形式で Cloud Storage に保存する(3.5)。本番(Cloud Run)は Cloud Storage を使う。
 - 既存のサンプル(`tests/sample_cloth_indexs`)は取り込まない。一覧は 0 件から始まる。
 - 服が写っていない写真・対応していない形式(HEIC など)・10 MB を超える写真は、その写真だけエラーになる。
   Gemini の失敗(クォータ超過など)は「再解析」で解析し直せる。
@@ -909,7 +960,7 @@ gcloud secrets versions add youtube-data-api-key --data-file=<キーだけを書
 
 **注意点**
 
-- **登録した手持ちの服は、デプロイのたび(と、しばらくアクセスが無くてサーバーが止まったとき)に消える。** 保存先が Cloud Run のサーバーの中のため。Cloud Storage への移行までは、デモの直前に登録し直す。
+- 登録した手持ちの服は Cloud Storage のバケット `ai-agent-hackathon-508804-wardrobe` に保存される(3.5。spec 036)。デプロイやサーバーの停止では消えない。
 - しばらくアクセスが無いと、最初の 1 回は起動に数秒かかる(最小インスタンス数 0 のため)。**デモ当日だけ**、次のコマンドで常に 1 台起動しておける(その間は費用がかかるので、終わったら 0 に戻す)。
 
 ```bash
@@ -917,7 +968,7 @@ gcloud run services update cloth-ai-agent --region asia-northeast1 --min-instanc
 gcloud run services update cloth-ai-agent --region asia-northeast1 --min-instances 0   # デモ後
 ```
 
-- サーバーは最大 1 台(登録した服がサーバーごとに分かれないようにするため)。
+- サーバーは最大 1 台(spec 035 の決定)。服の保存先を Cloud Storage に移したため、台数を増やしても服は分かれない。引き上げるかは spec 036 の未決事項 3。
 
 ### 4.14 利用者の入力のチェック(プロンプトインジェクション対策)
 
@@ -1072,6 +1123,7 @@ docs/spec/001-user-authentication/
 | [014-venue-info](docs/spec/014-venue-info/) | 会場の形態(スタンディング / 着席 / 混在)の取得とコーデ提案への連携(F14) | 実装中(tasks 17 / 18。T-13 の疎通確認が残り)/ 客席の表示は spec 015 の画面には無い |
 | [015-ui-redesign](docs/spec/015-ui-redesign/) | 画面の作り直し(参考 UI `tadasii/` に合わせた 1 画面の流れ。機能は変えない) | 実装完了(ブラウザで確認済み)/ ユーザーの確認待ち |
 | [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 13 / 14、ロールバックの確認は後日) |
+| [036-wardrobe-cloud-storage](docs/spec/036-wardrobe-cloud-storage/) | 手持ちの服(写真と index.json)の Cloud Storage への保存。設定で切り替え、既定はローカル(F06) | 実装完了(実バケットで保存・一覧・削除・エージェントの参照を確認済み)/ 画面からの確認と本番での確認待ち |
 | [037-input-guard](docs/spec/037-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
 
 ---
@@ -1287,6 +1339,9 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | ライブの天気が「不明」になる | Gemini が天気を検索で確認できなかった(出典の無い天気は推測の可能性があるため出さない)。時間をおいて再検索する |
 | 「この MV の衣装」だけが `映像を解析できませんでした` | 非公開・限定公開・年齢制限のある動画は解析できない。公開動画でも出る場合は、`CULTURE_MODEL` が YouTube の動画入力に対応しているか確認する(Vertex AI ではプレビュー機能) |
 | エージェントや「手持ちの服」がサンプルの服を返す / 登録した服が `tests/` に書き込まれる | `backend/.env` の `CLOTH_INDEX_PATH` が `tests/sample_cloth_indexs/index.json` のまま。`data/wardrobe/index.json` に変える(または行を消して既定を使う) |
+| 手持ちの服の一覧・登録・提案が 502 で `Cloud Storage: Forbidden` などが出る | `WARDROBE_STORAGE=gcs` で、バケットに読み書きできない。`WARDROBE_GCS_BUCKET` の名前、ADC のアカウント(本番はサービスアカウント)にバケットの `roles/storage.objectUser` があるかを確認する(3.5) |
+| 手持ちの服が 502 で `WARDROBE_GCS_BUCKET が未設定です` | `WARDROBE_STORAGE=gcs` なのにバケット名が空。`backend/.env`(本番は `env.deploy.yaml`)に設定する |
+| ローカルで登録した服が画面に出ない / 本番の服が見える | `WARDROBE_STORAGE` の設定を確認する。`gcs` だと本番と同じバケットを見る(3.5) |
 | 写真の登録で `写真が大きすぎます`(413) | 1 枚 10 MB まで(`WARDROBE_MAX_IMAGE_BYTES`)。アプリは長辺 1600px に縮小して送るため、通常は API を直接呼んだときだけ起きる |
 | 写真が `対応していない形式です` になる | jpg / png / webp のみ対応。iPhone の HEIC は「設定 → カメラ → フォーマット → 互換性優先」で JPEG にする |
 | 「コーディネートを提案してもらう」を押しても始まらない | 画面上部の「入力内容を確認してください」を見る。① で MV の表示・② で候補の選択・③ で手持ちの服 1 点以上が必要。カルチャー情報の取得中も始まらない |

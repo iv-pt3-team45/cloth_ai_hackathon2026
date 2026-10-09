@@ -12,6 +12,7 @@ dependencies = [
     "google-genai>=1.0.0",
     "python-json-logger>=2.0.7",
     "google-adk>=2.9.1",
+    "google-cloud-storage>=3.16.0",
 ]
 
 [dependency-groups]

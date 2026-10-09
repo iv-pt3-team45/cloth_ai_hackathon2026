@@ -27,10 +27,10 @@ from app.services.cloth_index import ClothIndexError, ClothItem, analyze_cloth_b
 from app.services.grounding import is_quota_error
 from app.services.input_guard import ensure_safe
 from app.services.wardrobe_store import (
-    LocalWardrobeStore,
     StoredEntry,
     WardrobeStore,
     WardrobeStoreError,
+    create_wardrobe_store,
 )
 
 logger = logging.getLogger(__name__)
@@ -164,9 +164,10 @@ class WardrobeService:
         client: genai.Client | None = None,
     ) -> None:
         # store / client はテストで差し替えるためのもの。
-        # 保存先は CLOTH_INDEX_PATH(チャットのエージェントと同じ index.json)
+        # 保存先は WARDROBE_STORAGE で決まる(既定は CLOTH_INDEX_PATH。spec 036)。
+        # チャットのエージェントも同じ保存先を参照する
         self._settings = settings or get_settings()
-        self._store = store or LocalWardrobeStore(self._settings.cloth_index_file)
+        self._store = store or create_wardrobe_store(self._settings)
         self._client = client
 
     def analyze(self, image: WardrobeImage) -> AnalyzeResponse:
@@ -211,7 +212,11 @@ class WardrobeService:
 
     def list_items(self) -> list[RegisteredCloth]:
         """登録済みの服を新しい順に返す。"""
-        entries = self._store.list_entries()
+        try:
+            entries = self._store.list_entries()
+        except (WardrobeStoreError, OSError) as exc:
+            logger.warning("服の一覧を読み込めませんでした: %s", type(exc).__name__)
+            raise WardrobeError(f"服の一覧を読み込めませんでした: {exc}") from exc
         return [item for entry in reversed(entries) for item in to_registered(entry)]
 
     def delete(self, item_id: str) -> None:
@@ -226,7 +231,11 @@ class WardrobeService:
 
     def read_image(self, image: str) -> tuple[bytes, str]:
         """保存した写真を (バイト列, MIME タイプ) で返す。"""
-        found = self._store.read_image(image)
+        try:
+            found = self._store.read_image(image)
+        except (WardrobeStoreError, OSError) as exc:
+            logger.warning("服の写真を読み込めませんでした: %s", type(exc).__name__)
+            raise WardrobeError(f"写真を読み込めませんでした: {exc}") from exc
         if found is None:
             raise WardrobeNotFoundError("写真が見つかりませんでした。")
         return found
