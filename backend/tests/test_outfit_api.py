@@ -9,6 +9,7 @@ from google.genai import errors
 
 from app.main import create_app
 from app.services.outfit import get_outfit_service
+from tests.auth_stub import as_owner
 from tests.gemini_stub import calls_of
 from tests.outfit_stub import (
     make_culture,
@@ -28,6 +29,7 @@ def make_api(tmp_path: Path, respond: Any, register: bool = True, **settings: An
     service, _ = make_service(config, respond)
     app = create_app()
     app.dependency_overrides[get_outfit_service] = lambda: service
+    as_owner(app)
     return TestClient(app), ids
 
 
@@ -83,6 +85,7 @@ def test_suggest_passes_venue_format(tmp_path: Path) -> None:
     service, client = make_service(config, responder(suggestion(ids["Tシャツ"])))
     app = create_app()
     app.dependency_overrides[get_outfit_service] = lambda: service
+    as_owner(app)
 
     res = TestClient(app).post(
         "/api/v1/outfit/suggest", json={**suggest_body(), "venue_format": "mixed"}

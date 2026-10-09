@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import Settings, get_settings
+from app.services.auth import Owner
 from app.services.cloth_index import ClothItem
 from app.services.wardrobe_store import (
     WardrobeStoreError,
@@ -62,12 +63,21 @@ def load_wardrobe_from_store(settings: Settings) -> list[WardrobeItem]:
     Raises:
         WardrobeStoreError: 保存先を読めない(Cloud Storage につながらないなど)。
     """
-    entries = create_wardrobe_store(settings).list_entries()
+    entries = create_wardrobe_store(settings, agent_owner(settings)).list_entries()
     return [
         WardrobeItem(image=entry.image, **item.model_dump(exclude={"id"}))
         for entry in entries
         for item in entry.items
     ]
+
+
+def agent_owner(settings: Settings) -> Owner | None:
+    """エージェントが読む服の持ち主(spec 038)。`AGENT_WARDROBE_USER`(CLI の --user)で指定する。
+
+    指定が無ければ None(今までどおりの置き場所)。
+    """
+    user_id = settings.agent_wardrobe_user
+    return Owner(kind="user", id=user_id) if user_id else None
 
 
 def item_text(item: WardrobeItem) -> str:
@@ -135,7 +145,7 @@ def build_wardrobe_tools(settings: Settings | None = None) -> list[Callable[...,
         except WardrobeStoreError as exc:
             logger.warning("手持ちの服の保存先を読み込めませんでした: %s", exc)
             return _unreadable(exc)
-        return items or _no_index(describe_wardrobe_location(bound))
+        return items or _no_index(describe_wardrobe_location(bound, agent_owner(bound)))
 
     def list_wardrobe() -> dict[str, Any]:
         """利用者が持っている服(ワードローブ)の一覧を取得する。

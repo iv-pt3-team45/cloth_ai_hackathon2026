@@ -9,6 +9,7 @@ from google.genai import errors
 from app.main import create_app
 from app.services.wardrobe import build_wardrobe_tools
 from app.services.wardrobe_registry import get_wardrobe_service
+from tests.auth_stub import as_owner
 from tests.wardrobe_stub import JPEG, PNG, fake_client, image_body, make_service, make_settings
 
 
@@ -16,6 +17,7 @@ def make_api(tmp_path: Path, client: Any = None) -> TestClient:
     app = create_app()
     service = make_service(tmp_path, client)
     app.dependency_overrides[get_wardrobe_service] = lambda: service
+    as_owner(app)
     return TestClient(app)
 
 

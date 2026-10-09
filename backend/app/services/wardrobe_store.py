@@ -15,13 +15,14 @@ import logging
 import re
 import secrets
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings
+from app.services.auth import GUEST_ID, USER_ID, Owner
 from app.services.cloth_index import ClothItem
 from app.services.media import build_file_name
 
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 IMAGES_DIR_NAME = "images"
 # 写真のファイル名として受け付ける文字(保存先のフォルダの外を指せないようにする)
 IMAGE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+# 持ち主の ID として受け付ける形(ユーザー ID か、ゲスト番号。spec 038)
+OWNER_ID = re.compile(f"{USER_ID.pattern}|{GUEST_ID.pattern}")
 _MIME_BY_SUFFIX = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -85,9 +88,11 @@ class WardrobeStore(Protocol):
 class LocalWardrobeStore:
     """`index.json` と `images/` をローカルのフォルダに保存する実装。"""
 
-    def __init__(self, index_file: Path) -> None:
+    def __init__(self, index_file: Path, max_age: timedelta | None = None) -> None:
+        # max_age はゲストの服の期限(spec 038)。それより古い服は読まない(書き戻すときに消える)
         self.index_file = index_file
         self.images_dir = index_file.parent / IMAGES_DIR_NAME
+        self.max_age = max_age
 
     def list_entries(self) -> list[StoredEntry]:
         with _lock:
@@ -139,11 +144,12 @@ class LocalWardrobeStore:
         if not self.index_file.is_file():
             return []
         try:
-            return parse_index(self.index_file.read_text(encoding="utf-8"))
+            entries = parse_index(self.index_file.read_text(encoding="utf-8"))
         except Exception as exc:
             raise WardrobeStoreError(
                 f"服のインデックスを読み込めませんでした: {self.index_file}"
             ) from exc
+        return drop_expired(entries, self.max_age)
 
     def _save(self, entries: list[StoredEntry]) -> None:
         self.index_file.parent.mkdir(parents=True, exist_ok=True)
@@ -153,28 +159,79 @@ class LocalWardrobeStore:
         temp.replace(self.index_file)
 
 
-def create_wardrobe_store(settings: Settings) -> WardrobeStore:
+def create_wardrobe_store(settings: Settings, owner: Owner | None = None) -> WardrobeStore:
     """設定 `WARDROBE_STORAGE` に従って保存先を作る(spec 036)。
 
     既定(local)はローカルのフォルダ。gcs のときだけ Cloud Storage のライブラリを読み込む。
+    owner を渡すと、持ち主ごとの置き場所にする(spec 038)。ゲストは
+    `GUEST_WARDROBE_HOURS` より古い服を読まない。owner が無ければ今までどおりの置き場所
+    (CLI のエージェントの既定)。
     """
+    max_age = _max_age(settings, owner)
     if settings.wardrobe_storage == "gcs":
         from app.services.wardrobe_gcs import GcsWardrobeStore
 
         return GcsWardrobeStore(
             bucket_name=settings.wardrobe_gcs_bucket,
-            prefix=settings.wardrobe_gcs_prefix,
+            prefix=owner_prefix(owner) if owner else settings.wardrobe_gcs_prefix,
             project=settings.google_cloud_project,
+            max_age=max_age,
         )
-    return LocalWardrobeStore(settings.cloth_index_file)
+    return LocalWardrobeStore(_local_index_file(settings, owner), max_age=max_age)
 
 
-def describe_wardrobe_location(settings: Settings) -> str:
+def describe_wardrobe_location(settings: Settings, owner: Owner | None = None) -> str:
     """保存先の場所を人が読める形で返す(エージェントの案内文・ログ用)。"""
     if settings.wardrobe_storage == "gcs":
-        prefix = settings.wardrobe_gcs_prefix.strip("/")
+        prefix = owner_prefix(owner) if owner else settings.wardrobe_gcs_prefix.strip("/")
         return f"gs://{settings.wardrobe_gcs_bucket}/{prefix}/index.json"
-    return str(settings.cloth_index_file)
+    return str(_local_index_file(settings, owner))
+
+
+def owner_prefix(owner: Owner) -> str:
+    """持ち主ごとの置き場所(spec 038)。ユーザーは users/、ゲストは guests/ の下。
+
+    Owner の id はトークンの確認(auth.decode_token)で形式を確かめてあるが、
+    フォルダ名に使うため、ここでも置き場所の外を指せないことを確かめる。
+    """
+    if not OWNER_ID.match(owner.id):
+        raise WardrobeStoreError("持ち主の ID が不正です。")
+    group = "users" if owner.kind == "user" else "guests"
+    return f"{group}/{owner.id}/wardrobe"
+
+
+def _local_index_file(settings: Settings, owner: Owner | None) -> Path:
+    if owner is None:
+        return settings.cloth_index_file
+    return settings.wardrobe_local_root_path / owner_prefix(owner) / "index.json"
+
+
+def _max_age(settings: Settings, owner: Owner | None) -> timedelta | None:
+    if owner is not None and owner.kind == "guest":
+        return timedelta(hours=settings.guest_wardrobe_hours)
+    return None
+
+
+def drop_expired(entries: list[StoredEntry], max_age: timedelta | None) -> list[StoredEntry]:
+    """登録から max_age より古い写真の記録を除く(ゲストの服。spec 038)。
+
+    登録日時が読めない記録は残す(古い形式のデータを消さないため)。
+    """
+    if max_age is None:
+        return entries
+    limit = datetime.now().astimezone() - max_age
+    fresh = []
+    for entry in entries:
+        try:
+            registered = datetime.fromisoformat(entry.analyzed_at)
+        except ValueError:
+            fresh.append(entry)
+            continue
+        if registered.tzinfo is None:
+            registered = registered.astimezone()
+        if registered >= limit:
+            fresh.append(entry)
+    return fresh
 
 
 def new_entry(mime_type: str, items: list[ClothItem], summary: str, model: str) -> StoredEntry:
