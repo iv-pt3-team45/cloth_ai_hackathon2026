@@ -1222,7 +1222,7 @@ docs/spec/001-user-authentication/
 | [014-venue-info](docs/spec/014-venue-info/) | 会場の形態(スタンディング / 着席 / 混在)の取得とコーデ提案への連携(F14) | 実装中(tasks 17 / 18。T-13 の疎通確認が残り)/ 客席の表示は spec 015 の画面には無い |
 | [015-ui-redesign](docs/spec/015-ui-redesign/) | 画面の作り直し(参考 UI `tadasii/` に合わせた 1 画面の流れ。機能は変えない) | 実装完了(ブラウザで確認済み)/ ユーザーの確認待ち |
 | [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 13 / 14、ロールバックの確認は後日) |
-| [036-wardrobe-cloud-storage](docs/spec/036-wardrobe-cloud-storage/) | 手持ちの服(写真と index.json)の Cloud Storage への保存。設定で切り替え、既定はローカル(F06) | 実装完了(実バケットで保存・一覧・削除・エージェントの参照を確認済み)/ 画面からの確認と本番での確認待ち |
+| [036-wardrobe-cloud-storage](docs/spec/036-wardrobe-cloud-storage/) | 手持ちの服(写真と index.json)の Cloud Storage への保存。設定で切り替え、既定はローカル(F06) | 実装完了(本番の画面から Cloud Storage への保存を確認済み)/ 再デプロイ後に服が残ることの確認待ち |
 | [037-input-guard](docs/spec/037-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
 | [038-user-login](docs/spec/038-user-login/) | ユーザーのログイン(事前に登録したユーザーのみ)と、手持ちの服のユーザーごとの紐づけ。ログインしない人はゲスト(服は 1 日で消える) | 実装完了(ローカルで API と画面を確認済み)/ Secret Manager の権限付与(清水)と本番での確認待ち |
 
