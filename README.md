@@ -1,3 +1,5 @@
+# アプリURL
+    画面: https://ai-agent-hackathon-508804.web.app
 よく使うgitのコマンド
 # 一番最初にやること
 	git clone https://~~~~~~~~~
@@ -27,6 +29,15 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 **SPEC 駆動開発**(要件 → 設計 → タスク → 実装)で開発を進める。
 
 > このリポジトリの「正」となるドキュメントは本 README です。構成・手順・方針を変更したら、**同じコミットで README も更新**してください(運用ルールは [CLAUDE.md](CLAUDE.md) 参照)。
+
+## 動作中のアプリ
+
+| 用途 | URL |
+| --- | --- |
+| 画面(ここから使う) | https://ai-agent-hackathon-508804.web.app |
+| API(Cloud Run) | https://cloth-ai-agent-872278396120.asia-northeast1.run.app(API の一覧は `/docs`) |
+
+main にマージすると自動で更新されます(詳細は [4.13](#413-本番環境cloud-run--firebase-hostingへのデプロイ))。
 
 ---
 
@@ -1210,7 +1221,7 @@ docs/spec/001-user-authentication/
 | [011-outfit-suggestion](docs/spec/011-outfit-suggestion/) | 手持ちの服からのコーデ提案(マネキンに着せた画像の生成)。確認タブは 015 で置き換え | 実装完了(実 API 確認済み)/ ブラウザでの目視確認待ち |
 | [014-venue-info](docs/spec/014-venue-info/) | 会場の形態(スタンディング / 着席 / 混在)の取得とコーデ提案への連携(F14) | 実装中(tasks 17 / 18。T-13 の疎通確認が残り)/ 客席の表示は spec 015 の画面には無い |
 | [015-ui-redesign](docs/spec/015-ui-redesign/) | 画面の作り直し(参考 UI `tadasii/` に合わせた 1 画面の流れ。機能は変えない) | 実装完了(ブラウザで確認済み)/ ユーザーの確認待ち |
-| [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 11 / 14) |
+| [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 13 / 14、ロールバックの確認は後日) |
 | [036-wardrobe-cloud-storage](docs/spec/036-wardrobe-cloud-storage/) | 手持ちの服(写真と index.json)の Cloud Storage への保存。設定で切り替え、既定はローカル(F06) | 実装完了(実バケットで保存・一覧・削除・エージェントの参照を確認済み)/ 画面からの確認と本番での確認待ち |
 | [037-input-guard](docs/spec/037-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
 | [038-user-login](docs/spec/038-user-login/) | ユーザーのログイン(事前に登録したユーザーのみ)と、手持ちの服のユーザーごとの紐づけ。ログインしない人はゲスト(服は 1 日で消える) | 実装完了(ローカルで API と画面を確認済み)/ Secret Manager の権限付与(清水)と本番での確認待ち |

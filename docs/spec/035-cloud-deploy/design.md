@@ -97,6 +97,7 @@ PR を main にマージ
 | `roles/storage.objectAdmin` | バケット `run-sources-ai-agent-hackathon-508804-asia-northeast1` のみ | `--source` でソースコードをアップロードする |
 | `roles/storage.legacyBucketReader` | 同上のバケットのみ | アップロード前にバケットの存在を確認する(`objectAdmin` には含まれないため。T-05 で追加) |
 | `roles/artifactregistry.reader` | リポジトリ `cloud-run-source-deploy`(`asia-northeast1`)のみ | デプロイ時にイメージの保存先を確認する(T-05 で追加) |
+| `roles/storage.bucketViewer` | プロジェクト | `--source` のアップロード前にバケットの一覧を取得する(`storage.buckets.list` はバケット単位では付けられないため。T-11 で追加) |
 | `roles/serviceusage.serviceUsageConsumer` | プロジェクト | gcloud / Firebase CLI が API を呼ぶ |
 | `roles/firebasehosting.admin` | プロジェクト | Firebase Hosting にデプロイする |
 
