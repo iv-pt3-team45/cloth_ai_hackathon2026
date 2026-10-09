@@ -22,7 +22,7 @@ class OutfitProgressView extends StatefulWidget {
     required this.stage,
     required this.startedAt,
     required this.clothes,
-    required this.imageUrl,
+    required this.photo,
     required this.onCancel,
     this.imageFailed = false,
   });
@@ -32,7 +32,7 @@ class OutfitProgressView extends StatefulWidget {
 
   /// 並べて見せる服(考えている間は手持ちの服すべて、画像を作る間は提案の服)
   final List<RegisteredCloth> clothes;
-  final String Function(String image) imageUrl;
+  final PhotoLoader photo;
   final VoidCallback onCancel;
 
   /// 画像の生成だけが失敗した(終わったときの見出しと段階 2 の表示に使う)
@@ -133,7 +133,8 @@ class _OutfitProgressViewState extends State<OutfitProgressView> {
                     child: SizedBox.square(
                       dimension: 48,
                       child: ClothPhoto(
-                        url: widget.imageUrl(widget.clothes[i].image),
+                        image: widget.clothes[i].image,
+                        load: widget.photo,
                       ),
                     ),
                   ),

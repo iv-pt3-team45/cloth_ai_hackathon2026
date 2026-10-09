@@ -1,15 +1,22 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import '../../core/api_client.dart';
-import '../../core/app_config.dart';
+import '../../core/auth_session.dart';
 import 'photo_picker.dart';
 import 'wardrobe_models.dart';
 
 /// 手持ちの服(spec 010)のデータアクセス層。
+///
+/// ログイン・ゲストのトークンを付けて呼ぶ(spec 038)。服はトークンの持ち主ごとに分かれる。
 class WardrobeRepository {
-  WardrobeRepository({ApiClient? client}) : _client = client ?? ApiClient();
+  WardrobeRepository({ApiClient? client})
+    : _client = client ?? ApiClient(auth: AuthSession.shared);
 
   final ApiClient _client;
+
+  /// 取得した写真(写真名 → バイト列)。写真名は持ち主をまたいで重ならない
+  final _photos = <String, Future<Uint8List>>{};
 
   /// 写真 1 枚を Gemini で解析する(保存はしない)。
   Future<ClothAnalysis> analyze(PickedPhoto photo) async {
@@ -42,10 +49,15 @@ class WardrobeRepository {
     await _client.delete('/wardrobe/items/${Uri.encodeComponent(id)}');
   }
 
-  /// 保存した写真の URL。
-  String imageUrl(String image) => AppConfig.endpoint(
-    '/wardrobe/images/${Uri.encodeComponent(image)}',
-  ).toString();
+  /// 保存した写真のバイト列(トークンを付けて取得する。spec 038)。
+  ///
+  /// 同じ写真は 1 回だけ取得する。失敗したら、次に呼ばれたときに取り直す。
+  Future<Uint8List> imageBytes(String image) => _photos[image] ??= _client
+      .getBytes('/wardrobe/images/${Uri.encodeComponent(image)}')
+      .catchError((Object error) {
+        _photos.remove(image);
+        throw error;
+      });
 
   Map<String, dynamic> _image(PickedPhoto photo) => {
     'mime_type': photo.mimeType,
