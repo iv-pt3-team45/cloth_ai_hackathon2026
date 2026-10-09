@@ -43,10 +43,12 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 | 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)・ライブ情報(4.10)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
 | メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4)。画像はコーデ提案でマネキンに服を着せるのにも使う(4.12) |
 | 保存先 | Cloud Storage(`google-cloud-storage`) | 手持ちの服の写真と `index.json`(4.11)。`WARDROBE_STORAGE=gcs` のとき。既定はローカル(3.5。spec 036)。認証は ADC |
+| ログイン | 自前(パスワードは `hashlib.scrypt`、トークンは JWT = `PyJWT`) | 事前に登録したユーザーだけがログインできる。ログインしない人はゲスト(3.6。spec 038)。外部の認証サービスは使わない |
 | 実行環境 | Docker Compose | フロント / バックを 1 コマンドで同時起動 |
 | 設定管理 | pydantic-settings / `.env` | 秘匿情報は Git 管理外 |
 | 写真の選択(フロント) | `image_picker` | 手持ちの服の登録(4.11)。Web ではファイル選択、スマホでは写真・カメラ |
 | リンク(フロント) | `url_launcher` | 出典のリンクをタップで開く(4.12。spec 015) |
+| ログイン状態の保存(フロント) | `shared_preferences` | トークンをブラウザに保存し、再読み込み・開き直しても使う(3.6。spec 038) |
 | 画面のデザイン | 参考 UI `tadasii/`(Git 管理外) | 配色・カード・1 画面の流れを移植(spec 015)。`lib/core/theme.dart` / `widgets.dart` |
 
 ## 2. アーキテクチャ
@@ -66,9 +68,11 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 │  │            │                                                  │  │
 │  │            ▼                                                  │  │
 │  │   core/api_client.dart  ── HTTP / JSON / 例外変換             │  │
+│  │   core/auth_session.dart ── ログイン・ゲストのトークン(保存) │  │
 │  └───────────────────────────────┬───────────────────────────────┘  │
 └──────────────────────────────────┼──────────────────────────────────┘
                                    │ HTTP (JSON)  /api/v1/**
+                                   │ 手持ちの服・コーデ提案は Authorization: Bearer <トークン>
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ FastAPI Backend  (localhost:8000)                                   │
@@ -86,6 +90,8 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 │   app/services/youtube.py ── YouTube Data API を httpx で直接呼ぶ   │
 │   app/services/culture.py, live.py, outfit.py ── Gemini を直接呼ぶ  │
 │   app/services/wardrobe_gcs.py ── 手持ちの服を Cloud Storage に保存 │
+│   app/services/auth.py ── ログイン・ゲストのトークン(spec 038)     │
+│   app/api/deps.py ── トークンを確かめて持ち主にする(無効なら 401)  │
 └──────────────────────────────────┼──────────────────────────────────┘
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -104,8 +110,10 @@ Flutter(フロント) + FastAPI(バックエンド) + Gemini on Google Cloud を
 │   Vertex AI ── Gemini (モデルは GEMINI_MODEL で指定)                │
 │   Vertex AI ── Grounding with Google Search / YouTube の動画入力    │
 │              (カルチャー・ライブ情報。culture.py / live.py から)    │
-│   Cloud Storage ── 手持ちの服の写真と index.json                    │
+│   Cloud Storage ── 手持ちの服の写真と index.json(持ち主ごと)、     │
+│              ログインできるユーザーの一覧(auth/users.json)         │
 │              (WARDROBE_STORAGE=gcs のとき。wardrobe_gcs.py から)    │
+│   Secret Manager ── トークンの署名の鍵(auth-secret-key。本番)      │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -170,24 +178,31 @@ tx_hackathon_gc/
 │   │   ├── main.py           # エントリポイント(create_app)
 │   │   ├── api/
 │   │   │   ├── router.py     # ルータ集約
-│   │   │   └── routes/       # health.py, chat.py, youtube.py, culture.py, live.py, wardrobe.py,
-│   │   │                     #   outfit.py
+│   │   │   ├── deps.py       # 共通の依存関係(トークンの確認 current_owner。spec 038)
+│   │   │   └── routes/       # health.py, auth.py, chat.py, youtube.py, culture.py, live.py,
+│   │   │                     #   wardrobe.py, outfit.py, venue.py
 │   │   ├── core/             # config.py, logging.py
-│   │   ├── schemas/          # Pydantic モデル(chat.py, youtube.py, culture.py, live.py, wardrobe.py,
-│   │   │                     #   outfit.py, common.py = 入力の共通チェック)
+│   │   ├── schemas/          # Pydantic モデル(auth.py, chat.py, youtube.py, culture.py, live.py,
+│   │   │                     #   wardrobe.py, outfit.py, venue.py, common.py = 入力の共通チェック)
 │   │   ├── services/         # agent.py, agent_loop.py, verification.py, media.py,
 │   │   │                     #   cloth_index.py, wardrobe.py, youtube.py, mv_title.py,
 │   │   │                     #   culture.py, live.py, grounding.py,
 │   │   │                     #   wardrobe_store.py, wardrobe_gcs.py, wardrobe_registry.py, outfit.py,
-│   │   │                     #   input_guard.py(入力のチェック)ほか
+│   │   │                     #   input_guard.py(入力のチェック)、
+│   │   │                     #   auth.py, user_store.py, user_store_gcs.py(ログイン)ほか
 │   │   ├── assets/           # アプリが使う固定の画像(コーデ画像のマネキン white_manekin_9vs16.jpg。Git 管理)
 │   │   ├── created_images/   # 生成された画像の保存先(Git 管理外)
 │   │   └── created_videos/   # 生成された動画の保存先(Git 管理外)
-│   ├── data/wardrobe/        # 登録した手持ちの服(index.json と images/。Git 管理外。WARDROBE_STORAGE=local のとき)
+│   ├── data/                 # WARDROBE_STORAGE=local のときの保存先(Git 管理外)
+│   │   ├── users/<ID>/wardrobe/   # ログインしたユーザーの服(index.json と images/。spec 038)
+│   │   ├── guests/<番号>/wardrobe/ # ゲストの服
+│   │   ├── auth/users.json        # ログインできるユーザー(パスワードはハッシュ)
+│   │   └── wardrobe/              # 持ち主の無い置き場所(CLI のエージェントの既定)
 │   ├── scripts/
 │   │   ├── run_agent.py      # 対話でエージェントを動かす CLI
 │   │   ├── run_agent_loop.py # 生成 → 検証 → 再生成 を繰り返す CLI
-│   │   └── build_cloth_index.py # 服画像から属性インデックスを作る CLI
+│   │   ├── build_cloth_index.py # 服画像から属性インデックスを作る CLI
+│   │   └── manage_users.py   # ログインできるユーザーの追加・削除・パスワード変更(運営用。spec 038)
 │   └── tests/                # pytest
 │       ├── sample_images/        # 服のサンプル画像
 │       └── sample_cloth_indexs/  # 抽出した属性インデックス(index.json)
@@ -198,8 +213,10 @@ tx_hackathon_gc/
 │   ├── lib/
 │   │   ├── main.dart         # テーマとタイトル
 │   │   ├── app/              # home_page.dart(入力 → AIが考え中 → 提案 の 1 画面の流れ)
-│   │   ├── core/             # app_config.dart, api_client.dart, theme.dart, widgets.dart, link.dart
-│   │   └── features/         # 機能ごと(mv_lookup/, wardrobe/, outfit/, chat/ は画面からは開かない)
+│   │   ├── core/             # app_config.dart, api_client.dart, auth_session.dart(ログイン状態),
+│   │   │                     #   theme.dart, widgets.dart, link.dart
+│   │   └── features/         # 機能ごと(mv_lookup/, wardrobe/, outfit/, auth/ = ログインの画面。
+│   │                         #   chat/ は画面からは開かない)
 │   └── test/
 ├── docs/
 │   └── spec/                 # SPEC 駆動開発のドキュメント
@@ -221,7 +238,8 @@ tx_hackathon_gc/
 │       ├── 015-ui-redesign/
 │       ├── 035-cloud-deploy/
 │       ├── 036-wardrobe-cloud-storage/
-│       └── 037-input-guard/
+│       ├── 037-input-guard/
+│       └── 038-user-login/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
 ```
@@ -280,7 +298,12 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `WARDROBE_MAX_IMAGE_BYTES` | `10485760` | 登録する写真 1 枚の上限(10 MB) |
 | `WARDROBE_STORAGE` | `local` | 手持ちの服の保存先。`local`(`CLOTH_INDEX_PATH` のフォルダ)/ `gcs`(Cloud Storage。3.5)。エージェント(4.7)も同じ保存先を読む |
 | `WARDROBE_GCS_BUCKET` | 空 | `gcs` のときのバケット名。本番は `ai-agent-hackathon-508804-wardrobe` |
-| `WARDROBE_GCS_PREFIX` | `wardrobe` | バケットの中の置き場所(接頭辞)。`<接頭辞>/index.json` と `<接頭辞>/images/` に保存する |
+| `WARDROBE_GCS_PREFIX` | `wardrobe` | 持ち主の無い置き場所(CLI のエージェントの既定)。画面から登録した服は `users/<ID>/wardrobe/`・`guests/<番号>/wardrobe/` に入る(3.6) |
+| `WARDROBE_LOCAL_ROOT` | `data` | `local` のとき、ユーザー・ゲストごとの服と `auth/users.json` を置くフォルダ(backend/ からの相対。3.6) |
+| `AUTH_SECRET_KEY` | 空 | トークンの署名の鍵(**秘匿情報**。3.6)。`.env.example` には書かない。ローカルで空なら起動のたびにランダムな鍵(再起動でログアウトされる)。本番は Secret Manager の `auth-secret-key` |
+| `AUTH_TOKEN_DAYS` | `7` | ログインしたまま・ゲストの番号を保つ期間(日) |
+| `GUEST_WARDROBE_HOURS` | `24` | ゲストの服を読む期限(時間)。バケットのライフサイクルルール(1 日)と揃える |
+| `AGENT_WARDROBE_USER` | 空 | CLI のエージェントが読む服のユーザー ID(CLI の `--user`。4.7) |
 | `YOUTUBE_DATA_API_KEY` | 空 | YouTube Data API v3 の API キー(**秘匿情報**。3.4) |
 | `YOUTUBE_SEARCH_MAX_RESULTS` | `5` | MV 名で検索したときの候補数 |
 | `YOUTUBE_REGION_CODE` | `JP` | 検索結果の地域。空なら指定しない |
@@ -408,6 +431,67 @@ gcloud storage ls -r gs://ai-agent-hackathon-508804-wardrobe/
 
 - 削除した写真も 7 日間は復元できる(バケットのソフト削除の既定)。
 - 同時に服を登録しても消えないよう、`index.json` は世代番号を条件にして書き込む(他の処理が先に書いていたら読み直してやり直す)。サーバーが複数台になっても成り立つ。
+- 画面から登録した服は、持ち主(ログインしたユーザー・ゲスト)ごとの置き場所に入る(3.6)。
+
+### 3.6 ログインとゲスト(spec 038)
+
+**ログインした人は手持ちの服がずっと残り、ログインしない人(ゲスト)は 1 日で消える。** MV 検索・ライブ情報などはログインと関係なく使える。
+
+| | ログインしたユーザー | ゲスト |
+| --- | --- | --- |
+| なれる人 | 運営が事前に登録したユーザーだけ(ユーザー登録の画面は無い) | 誰でも(画面を開くと自動でゲストになる) |
+| 服の置き場所 | `users/<ユーザーID>/wardrobe/` | `guests/<ゲスト番号>/wardrobe/` |
+| 服が残る期間 | ずっと。別の端末・ブラウザでログインしても同じ服 | 登録から 1 日(同じブラウザのときだけ見える) |
+| ログインしたまま | 7 日(`AUTH_TOKEN_DAYS`)。過ぎたらゲストに戻る | — |
+
+仕組み:
+
+- ログインもゲストも、サーバーが署名したトークン(JWT)を画面に渡し、画面はブラウザに保存する(`shared_preferences`)。手持ちの服・コーデ提案の API には `Authorization: Bearer <トークン>` を付けて送る。無い・無効なら 401。
+- サーバーはログインの状態を覚えない。ログアウトは画面がトークンを捨てるだけ(捨てたトークンも期限までは有効)。
+- パスワードはソルト付きのハッシュ(scrypt)だけを保存する。ユーザーの一覧は手持ちの服と同じ保存先の `auth/users.json`(`local` なら `backend/data/auth/users.json`)。ログインのたびに読むので、追加・削除はすぐ反映される。
+- ゲストの服は、バケットのライフサイクルルール(`guests/` の下を作成から 1 日で削除)で消える。削除は遅れることがあるため、アプリ側でも 1 日より古い服は読まない。ローカル(`local`)では自動で消えない。
+- 写真は URL を直接開いても見られない。画面はトークンを付けて写真のバイト列を取得して表示する。
+
+API:
+
+| エンドポイント | 内容 |
+| --- | --- |
+| `POST /api/v1/auth/login` | `{"user_id", "password"}` → トークン。誤りは 401(ID とパスワードのどちらが誤りかは言わない) |
+| `POST /api/v1/auth/guest` | ゲストのトークン |
+| `GET /api/v1/auth/me` | トークンの持ち主 |
+
+ユーザーの追加・削除(運営用。パスワードは引数では受け取らない):
+
+```bash
+cd backend
+uv run python scripts/manage_users.py list
+uv run python scripts/manage_users.py add demo06 --generate   # パスワードをランダムに作って 1 回だけ表示する
+uv run python scripts/manage_users.py add demo06              # パスワードを入力する
+uv run python scripts/manage_users.py passwd demo06 --generate
+uv run python scripts/manage_users.py delete demo06
+```
+
+- 保存先は `WARDROBE_STORAGE` に従う。**本番のユーザーを作るときは `WARDROBE_STORAGE=gcs` と `WARDROBE_GCS_BUCKET` を設定して実行する**(PowerShell なら `$env:WARDROBE_STORAGE="gcs"` など)。
+- 本番には `demo01`〜`demo05` を作ってある(パスワードは運営で管理。README や Git には書かない)。
+- パスワードを忘れたら `passwd` で作り直す(ハッシュしか保存していないため、元のパスワードは確かめられない)。
+
+GCP 側の設定(作成済み。作り直すときの記録):
+
+```bash
+# ゲストの服を作成から 1 日で消す(guests/ の下だけ)
+# lifecycle.json: {"rule":[{"action":{"type":"Delete"},"condition":{"age":1,"matchesPrefix":["guests/"]}}]}
+gcloud storage buckets update gs://ai-agent-hackathon-508804-wardrobe --lifecycle-file=lifecycle.json
+
+# トークンの署名の鍵(ランダムな文字列を書いた一時ファイルから作り、ファイルは消す)
+gcloud secrets create auth-secret-key --project ai-agent-hackathon-508804 \
+  --replication-policy automatic --data-file=<一時ファイル>
+# Cloud Run の実行用サービスアカウントに、この鍵だけを読む権限(プロジェクトのオーナーが実行する)
+gcloud secrets add-iam-policy-binding auth-secret-key --project ai-agent-hackathon-508804 \
+  --member serviceAccount:872278396120-compute@developer.gserviceaccount.com \
+  --role roles/secretmanager.secretAccessor
+```
+
+鍵を作り直す(新しいバージョンを足す)と、次のデプロイ以降は**全員がログアウトされ、ゲストの番号も変わる**(前のゲストの服は見えなくなる)。
 
 ---
 
@@ -655,6 +739,9 @@ uv run python scripts/run_agent_loop.py -m "手持ちの服を使った春コー
 
 # サンプル(4.6 の index.json)を参照する
 uv run python scripts/run_agent.py --index tests/sample_cloth_indexs/index.json -m "手持ちの服は？"
+
+# アプリでログインして登録したユーザーの服を参照する(3.6)
+uv run python scripts/run_agent.py --user demo01 -m "手持ちの服は？"
 ```
 
 | ツール | 使われる場面 |
@@ -666,6 +753,8 @@ uv run python scripts/run_agent.py --index tests/sample_cloth_indexs/index.json 
 - インデックスが無い場合もエラーにならず、「作成されていない」と応答する。
 - 参照先は手持ちの服の保存先(3.5。既定はローカルの `data/wardrobe/index.json`、`WARDROBE_STORAGE=gcs` なら Cloud Storage)。
   `--index` で指定したときは、保存先の設定にかかわらずそのローカルのファイルを読む。
+  `--user <ID>` で、そのユーザーの置き場所(`users/<ID>/wardrobe/`)を読む(`--index` と一緒なら `--index` が優先)。
+  画面から登録した服はユーザー・ゲストごとの置き場所に入るため、指定しないと既定の置き場所(`wardrobe/`)を読む。
   ツールは呼ばれるたびにファイルを読むため、登録・削除はすぐに反映される。
 - 渡すのは属性テキストのみで、画像そのものは渡さない。
 
@@ -817,7 +906,10 @@ curl -s -X POST http://localhost:8000/api/v1/live/search   -H "Content-Type: app
 | 暖かさ | 薄手 / 普通 / 厚手 から 1 つ |
 | 使う場面 | 普段着 / きれいめ(食事・オフィス) / フォーマル / スポーツ・アウトドア / ライブ・フェス から複数 |
 
-- 保存先は既定で `CLOTH_INDEX_PATH`(既定 `backend/data/wardrobe/index.json`)と、同じフォルダの `images/`。**Git 管理外**。
+- **服はログインしたユーザー・ゲストごとに分かれる**(3.6。spec 038)。ログインしていれば服はずっと残り、ゲストは登録から 1 日で消える。
+  ③ のカードの上部に、ゲストのときは案内と「ログイン」が出る。ヘッダの右側にはログイン中のユーザー名と「ログアウト」(ゲストなら「ゲスト」)。
+  ログイン・ログアウトしても ① ② の入力は残り、③ の一覧はその持ち主の服に読み直す(結果の画面にいたら入力の段階に戻る)。
+- 保存先は既定で `backend/data/users/<ID>/wardrobe/`(ゲストは `guests/<番号>/wardrobe/`)の `index.json` と `images/`。**Git 管理外**。
   形式は 4.6 の `index.json` に服ごとの `id` を足したもの。Docker Compose ではホストの `backend/` に残る。
   `WARDROBE_STORAGE=gcs` にすると、同じ形式で Cloud Storage に保存する(3.5)。本番(Cloud Run)は Cloud Storage を使う。
 - 既存のサンプル(`tests/sample_cloth_indexs`)は取り込まない。一覧は 0 件から始まる。
@@ -831,10 +923,13 @@ API から直接呼ぶ場合(画像は base64):
 # 解析(保存しない)
 curl -s -X POST http://localhost:8000/api/v1/wardrobe/analyze   -H "Content-Type: application/json"   -d "{\"image\": {\"mime_type\": \"image/jpeg\", \"data\": \"$(base64 -w0 shirt.jpg)\"}}"
 
-# 一覧 / 削除
-curl -s http://localhost:8000/api/v1/wardrobe/items
-curl -s -X DELETE http://localhost:8000/api/v1/wardrobe/items/<id>
+# 一覧 / 削除(トークンが必要。3.6。ゲストのトークンは POST /api/v1/auth/guest でもらえる)
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/guest | python -c "import json,sys; print(json.load(sys.stdin)['token'])")
+curl -s http://localhost:8000/api/v1/wardrobe/items -H "Authorization: Bearer $TOKEN"
+curl -s -X DELETE http://localhost:8000/api/v1/wardrobe/items/<id> -H "Authorization: Bearer $TOKEN"
 ```
+
+解析(`/wardrobe/analyze`)以外の手持ちの服の API と、コーデ提案の API(`/outfit/*`)は、トークンが無い・無効なら 401。
 
 保存(`POST /api/v1/wardrobe/items`)や応答の形は [docs/spec/010-wardrobe-registration/design.md](docs/spec/010-wardrobe-registration/design.md) の 3. を参照。
 
@@ -871,7 +966,9 @@ API から直接呼ぶ場合:
 
 ```bash
 # 提案(video / live は MV 検索・ライブ検索の応答をそのまま渡す。culture は省略可)
+# $TOKEN はログイン・ゲストのトークン(4.11・3.6)。その持ち主の服だけを使う
 curl -s -X POST http://localhost:8000/api/v1/outfit/suggest -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"video": {...}, "culture": {...}, "live": {...}, "venue_format": "standing"}'
 
 # 会場の形態(venue 以外は任意。失敗しても 200 で format は unknown)
@@ -880,7 +977,7 @@ curl -s -X POST http://localhost:8000/api/v1/venue/lookup -H "Content-Type: appl
 
 # 画像(item_ids は提案の items の id。手持ちに無い ID は 400。title は送っても使わない)
 curl -s -X POST http://localhost:8000/api/v1/outfit/image -H "Content-Type: application/json" \
-  -d '{"item_ids": ["<id>", "<id>"]}'
+  -H "Authorization: Bearer $TOKEN" -d '{"item_ids": ["<id>", "<id>"]}'
 ```
 
 応答の形は [docs/spec/011-outfit-suggestion/design.md](docs/spec/011-outfit-suggestion/design.md) の 3. (会場の形態は [docs/spec/014-venue-info/design.md](docs/spec/014-venue-info/design.md) の 3.)を参照。
@@ -933,19 +1030,21 @@ gcloud run services update-traffic cloth-ai-agent --region asia-northeast1 --to-
 gcloud run deploy cloth-ai-agent --source backend --region asia-northeast1 --project ai-agent-hackathon-508804 \
   --port 8000 --allow-unauthenticated --service-account 872278396120-compute@developer.gserviceaccount.com \
   --max-instances 1 --min-instances 0 --timeout 600 --memory 1Gi --cpu 1 \
-  --env-vars-file backend/env.deploy.yaml --set-secrets YOUTUBE_DATA_API_KEY=youtube-data-api-key:latest
+  --env-vars-file backend/env.deploy.yaml --set-secrets YOUTUBE_DATA_API_KEY=youtube-data-api-key:latest,AUTH_SECRET_KEY=auth-secret-key:latest
 ```
 
 - アップロードされるファイルは `backend/.gcloudignore` で絞っている(`.env` などは送らない)。実行前に `gcloud meta list-files-for-upload backend` で確認できる。
 - 本番の環境変数は `backend/env.deploy.yaml`。本番で既定値から変える値だけを書く(秘密情報は書かない)。
 
-**秘密情報(YouTube の API キー)**
+**秘密情報(YouTube の API キー・ログインのトークンの署名の鍵)**
 
-本番では Secret Manager の `youtube-data-api-key` から渡している。キーを差し替えるときは、新しいバージョンを追加すれば次のデプロイから使われる(コマンドの履歴にキーを残さないよう、ファイル経由で渡す)。
+本番では Secret Manager の `youtube-data-api-key` と `auth-secret-key`(spec 038。3.6)から渡している。キーを差し替えるときは、新しいバージョンを追加すれば次のデプロイから使われる(コマンドの履歴にキーを残さないよう、ファイル経由で渡す)。`auth-secret-key` を差し替えると、全員がログアウトされる。
 
 ```bash
 gcloud secrets versions add youtube-data-api-key --data-file=<キーだけを書いたファイル> --project ai-agent-hackathon-508804
 ```
+
+Cloud Run の実行用サービスアカウントが、どちらのシークレットも読めること(`roles/secretmanager.secretAccessor`)。読めないとデプロイが失敗する。
 
 **注意点**
 
@@ -1114,6 +1213,7 @@ docs/spec/001-user-authentication/
 | [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 11 / 14) |
 | [036-wardrobe-cloud-storage](docs/spec/036-wardrobe-cloud-storage/) | 手持ちの服(写真と index.json)の Cloud Storage への保存。設定で切り替え、既定はローカル(F06) | 実装完了(実バケットで保存・一覧・削除・エージェントの参照を確認済み)/ 画面からの確認と本番での確認待ち |
 | [037-input-guard](docs/spec/037-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
+| [038-user-login](docs/spec/038-user-login/) | ユーザーのログイン(事前に登録したユーザーのみ)と、手持ちの服のユーザーごとの紐づけ。ログインしない人はゲスト(服は 1 日で消える) | 実装完了(ローカルで API と画面を確認済み)/ Secret Manager の権限付与(清水)と本番での確認待ち |
 
 ---
 
@@ -1328,6 +1428,10 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | ライブの天気が「不明」になる | Gemini が天気を検索で確認できなかった(出典の無い天気は推測の可能性があるため出さない)。時間をおいて再検索する |
 | 「この MV の衣装」だけが `映像を解析できませんでした` | 非公開・限定公開・年齢制限のある動画は解析できない。公開動画でも出る場合は、`CULTURE_MODEL` が YouTube の動画入力に対応しているか確認する(Vertex AI ではプレビュー機能) |
 | エージェントや「手持ちの服」がサンプルの服を返す / 登録した服が `tests/` に書き込まれる | `backend/.env` の `CLOTH_INDEX_PATH` が `tests/sample_cloth_indexs/index.json` のまま。`data/wardrobe/index.json` に変える(または行を消して既定を使う) |
+| ログインできない(「ユーザー ID またはパスワードが違います」) | ユーザーが登録されているか `scripts/manage_users.py list` で確認する。**保存先(`WARDROBE_STORAGE`)がサーバーとコマンドで同じか**も確認する(ローカルで作ったユーザーは本番には無い)。忘れたら `passwd` で作り直す(3.6) |
+| 手持ちの服・コーデ提案が 401 になる / 画面がゲストに戻る | トークンが無い・期限切れ(7 日)・署名の鍵が変わった。ローカルで `AUTH_SECRET_KEY` が空だと、サーバーを再起動するたびに鍵が変わってログアウトされる(固定したいときは `backend/.env` に適当な長い文字列を書く) |
+| ログイン・ゲストの API が 503 で `AUTH_SECRET_KEY が未設定` | `ENVIRONMENT` が `local` 以外で鍵が無い。本番は `deploy.yml` の `--set-secrets` で `auth-secret-key` を渡す。Cloud Run の実行用サービスアカウントに、この鍵の `roles/secretmanager.secretAccessor` があるか確認する(3.6) |
+| `flutter test` が全件 `Connection closed before test suite loaded` | テストの仕組みが `127.0.0.1` につなぐ通信を社内プロキシが横取りしている。`NO_PROXY=localhost,127.0.0.1,::1` を設定してから実行する(PowerShell: `$env:NO_PROXY="localhost,127.0.0.1,::1"`) |
 | 手持ちの服の一覧・登録・提案が 502 で `Cloud Storage: Forbidden` などが出る | `WARDROBE_STORAGE=gcs` で、バケットに読み書きできない。`WARDROBE_GCS_BUCKET` の名前、ADC のアカウント(本番はサービスアカウント)にバケットの `roles/storage.objectUser` があるかを確認する(3.5) |
 | 手持ちの服が 502 で `WARDROBE_GCS_BUCKET が未設定です` | `WARDROBE_STORAGE=gcs` なのにバケット名が空。`backend/.env`(本番は `env.deploy.yaml`)に設定する |
 | ローカルで登録した服が画面に出ない / 本番の服が見える | `WARDROBE_STORAGE` の設定を確認する。`gcs` だと本番と同じバケットを見る(3.5) |
