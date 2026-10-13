@@ -1224,7 +1224,7 @@ docs/spec/001-user-authentication/
 | [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 13 / 14、ロールバックの確認は後日) |
 | [036-wardrobe-cloud-storage](docs/spec/036-wardrobe-cloud-storage/) | 手持ちの服(写真と index.json)の Cloud Storage への保存。設定で切り替え、既定はローカル(F06) | 実装完了(本番の画面から Cloud Storage への保存を確認済み)/ 再デプロイ後に服が残ることの確認待ち |
 | [037-input-guard](docs/spec/037-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
-| [038-user-login](docs/spec/038-user-login/) | ユーザーのログイン(事前に登録したユーザーのみ)と、手持ちの服のユーザーごとの紐づけ。ログインしない人はゲスト(服は 1 日で消える) | 実装完了(ローカルで API と画面を確認済み)/ Secret Manager の権限付与(清水)と本番での確認待ち |
+| [038-user-login](docs/spec/038-user-login/) | ユーザーのログイン(事前に登録したユーザーのみ)と、手持ちの服のユーザーごとの紐づけ。ログインしない人はゲスト(服は 1 日で消える) | 実装完了(ローカルで API と画面を確認済み。本番の準備も完了)/ 本番での確認待ち |
 
 ---
 
