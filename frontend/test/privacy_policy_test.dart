@@ -40,7 +40,7 @@ void main() {
     expect(find.byKey(privacyPolicyLinkKey), findsOneWidget);
   });
 
-  testWidgets('ポリシーの画面に 11 の節と、共有の注意・運営者・制定日が出る(AC-2)', (tester) async {
+  testWidgets('ポリシーの画面に 11 の節と、見られる人・運営者・制定日が出る(AC-2)', (tester) async {
     await _pump(tester, const PrivacyPolicyScreen());
 
     expect(find.text('プライバシーポリシー'), findsOneWidget); // AppBar
@@ -49,7 +49,7 @@ void main() {
     for (final (index, section) in policySections.indexed) {
       expect(find.text('${index + 1}. ${section.title}'), findsOneWidget);
     }
-    expect(find.textContaining('すべての人で共有されます'), findsOneWidget);
+    expect(find.textContaining('登録した本人だけが見られます'), findsOneWidget);
     expect(find.text(policyOperator), findsOneWidget);
     expect(find.text('制定日: $policyEstablished'), findsWidgets);
     expect(tester.takeException(), isNull);
@@ -63,12 +63,17 @@ void main() {
       'AI のサービスに送り',
       '動画や検索のサービスに送ります',
       'クラウドのサービスを使います',
-      'すべての人で共有されます',
+      '登録した本人だけが見られます',
+      '他の利用者のコーディネートの提案には使われません',
+      '登録してから一定の時間がたつと自動的に消えます',
+      'ログインやゲストの状態を保つための情報',
+      '新規登録の画面に入力した内容は、どこにも送りません',
+      'パスワードはそのまま保存せず',
+      'THE FIRST KITAKE',
       '利用者が削除するまで保存します',
       'しばらくのあいだ復元できる状態で残り',
       '解析だけして保存しなかった写真は、本アプリの保存先には残りません',
       'アクセス解析のツールや広告は使っていません',
-      'ログインは求めません',
     ]) {
       expect(text, contains(point));
     }
@@ -85,9 +90,13 @@ void main() {
       'YouTube',
       'HTTPS',
       '日間',
+      '1 日',
+      '7 日',
       '30 日',
     ]) {
       expect(text, isNot(contains(specific)));
     }
+    // アプリ名は spec 041 の「THE FIRST KITAKE」。前の名前は残さない
+    expect(text, isNot(contains('はじめてのライブ服')));
   });
 }
