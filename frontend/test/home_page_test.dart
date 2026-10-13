@@ -12,6 +12,7 @@ import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/outfit_models.dart';
+import 'package:tx_hackathon_gc/features/privacy/privacy_policy_screen.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_models.dart';
 import 'package:tx_hackathon_gc/main.dart';
 
@@ -118,6 +119,8 @@ void main() {
     expect(find.bySemanticsLabel('MV(未入力)'), findsOneWidget);
     expect(find.bySemanticsLabel('ライブの選択(未入力)'), findsOneWidget);
     expect(find.bySemanticsLabel('手持ちの服(2点)(OK)'), findsOneWidget);
+    // 一番下にプライバシーポリシーのリンク(spec 042)
+    expect(find.byKey(privacyPolicyLinkKey), findsOneWidget);
   });
 
   testWidgets('アプリを起動するとこの画面が出る', (tester) async {
@@ -192,6 +195,7 @@ void main() {
     // 送信バーと入力のカードは隠れる
     expect(find.text('コーディネートを提案してもらう'), findsNothing);
     expect(find.text('MV を選ぶ'), findsNothing);
+    expect(find.byKey(privacyPolicyLinkKey), findsNothing); // spec 042 AC-5
     final call = fakes.outfit.suggestCalls.single;
     expect(call.video.videoId, confirmVideo.videoId);
     expect(call.live.liveName, '公演A');
@@ -216,6 +220,7 @@ void main() {
     expect(find.text('晴れの日のライブコーデ'), findsOneWidget);
     expect(find.byKey(const ValueKey('outfit-image')), findsOneWidget);
     expect(find.text('会場・天気'), findsOneWidget);
+    expect(find.byKey(privacyPolicyLinkKey), findsNothing); // spec 042 AC-5
   });
 
   testWidgets('キャンセルすると入力に戻り、入力は残り、後から届いた結果では切り替わらない(AC-9)', (tester) async {
@@ -361,4 +366,38 @@ void main() {
     expect(find.text('晴れの日のライブコーデ'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'スマホの幅で一番下の「プライバシーポリシー」を押すと開き、← とブラウザの戻るで戻ると入力が残る(spec 042 AC-1, AC-3)',
+    (tester) async {
+      await _pump(tester, _Fakes(), size: const Size(390, 844));
+      await tester.enterText(find.byKey(mvQueryFieldKey), 'アイドル');
+      // 入力欄のカーソルを見せるスクロールを先に済ませる
+      await tester.pumpAndSettle();
+
+      // 提案ボタンのバーに隠れず、スクロールすれば押せる
+      await tester.ensureVisible(find.byKey(privacyPolicyLinkKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(privacyPolicyLinkKey));
+      await tester.pumpAndSettle();
+      expect(find.byType(PrivacyPolicyScreen), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(PrivacyPolicyScreen), findsNothing);
+      expect(find.text('アイドル'), findsOneWidget);
+
+      // ブラウザの戻る(システムの戻る)でも閉じる
+      await tester.ensureVisible(find.byKey(privacyPolicyLinkKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(privacyPolicyLinkKey));
+      await tester.pumpAndSettle();
+      expect(find.byType(PrivacyPolicyScreen), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(PrivacyPolicyScreen), findsNothing);
+      expect(find.text('アイドル'), findsOneWidget);
+      expect(_phaseSelected(tester, '1 入力'), isTrue);
+    },
+  );
 }

@@ -210,7 +210,8 @@ tx_hackathon_gc/
 │   │   ├── main.dart         # テーマとタイトル
 │   │   ├── app/              # home_page.dart(入力 → AIが考え中 → 提案 の 1 画面の流れ)
 │   │   ├── core/             # app_config.dart, api_client.dart, theme.dart, widgets.dart, link.dart
-│   │   └── features/         # 機能ごと(mv_lookup/, wardrobe/, outfit/, chat/ は画面からは開かない)
+│   │   └── features/         # 機能ごと(mv_lookup/, wardrobe/, outfit/, privacy/ = プライバシーポリシー,
+│   │                         #   chat/ は画面からは開かない)
 │   └── test/
 ├── docs/
 │   └── spec/                 # SPEC 駆動開発のドキュメント
@@ -232,7 +233,8 @@ tx_hackathon_gc/
 │       ├── 015-ui-redesign/
 │       ├── 035-cloud-deploy/
 │       ├── 036-wardrobe-cloud-storage/
-│       └── 037-input-guard/
+│       ├── 037-input-guard/
+│       └── 042-privacy-policy/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
 ```
@@ -877,6 +879,7 @@ Web アプリは**下部のタブが無い 1 画面**で、上部の段階表示
 - **(一時的なデバッグ機能)** `IMAGE_DEBUG_LOG=true`(既定)の間は、画像生成モデルに送ったプロンプト(テキスト全文・画像は形式と大きさ・設定)と応答の全文を、バックエンドのターミナル(compose なら `docker compose logs -f backend`)に出す。不要になったら `false` にする。画像が返らないときの調査に使う。
 - **会場の形態**(spec 014): ② でライブを選ぶと、その会場がスタンディングか着席か(両方あれば「混在」)を Gemini + Google 検索で裏で調べ(`VENUE_INFO_MODEL`、数秒〜十数秒)、提案のときに一緒に送る。画面には出さない(表示していた確認タブを spec 015 で外したため)。調べている途中で提案した場合はサーバが提案の前に調べる。分からなければ「不明」で、形態なしで提案する。
 - **チャット(エージェント)は画面からは開かない**(spec 015 で外した)。エージェントは CLI(4.3)から使える。
+- 入力の段階の一番下に、小さな灰色の文字で「プライバシーポリシー」のリンクがある(4.15。spec 042)。
 
 API から直接呼ぶ場合:
 
@@ -1008,6 +1011,24 @@ gcloud run services update cloth-ai-agent --region asia-northeast1 --min-instanc
 - 今はデータベース(SQL)を使っていない(手持ちの服は `index.json` のファイル)。Firestore / Cloud SQL などを使うときは、
   値は必ずプレースホルダ(パラメータ)で渡し、**文字列をつないで問い合わせ(SQL など)を作らない**。
 
+### 4.15 プライバシーポリシー
+
+利用者の服の写真を扱うため、アプリ内にプライバシーポリシーの画面がある(spec 042)。
+
+- 初期ページ(入力の段階)の一番下、③ 手持ちの服のカードの下に、小さな灰色の文字で「**プライバシーポリシー**」がある。
+  押すとアプリ内の画面が開き(全文を 1 つの枠にまとめ、節は「1. はじめに」のような見出しで分ける)、
+  ← またはブラウザの戻るで初期ページに戻る(入力は残る)。AI が考え中・提案の段階には出ない。
+- 文は `frontend/lib/features/privacy/privacy_policy.dart` の `policySections` にある。運営者(`policyOperator`。「テックドロップ」)と
+  制定日(`policyEstablished`)も同じファイルの定数。問い合わせ先の項目は無い。
+- 内容は **今の main の実装**(ログインなし・登録した服は全員で共有・削除するまで保存・外部のサービスに送る)に合わせて書いている。
+  外部のサービスの名前や保存の日数などの具体的な値は書かず、「AI のサービス」「しばらくのあいだ」のような一般的な言い方にしている
+  (テストで、サービスの名前や日数が入っていないことも確かめている)。
+
+> **データの扱いを変えたら、同じ変更でポリシーも直す。** 保存先・共有の範囲・保存期間・送り先の外部サービス・集める情報を変える spec は、
+> `privacy_policy.dart` と `frontend/test/privacy_policy_test.dart` も直すこと。
+> 特に spec 038(ログイン)をマージするときは、「取り扱う情報」「保存する期間と削除の方法」「登録した服は他の利用者にも見えます」
+> 「第三者への提供」「安全のための取り組み」を、ユーザーごとの保存先・ゲストの服は 1 日で消える・ログインの情報に合わせて書き直す。
+
 ---
 
 ## 5. テスト / 静的解析
@@ -1125,6 +1146,7 @@ docs/spec/001-user-authentication/
 | [035-cloud-deploy](docs/spec/035-cloud-deploy/) | Cloud Run / Firebase Hosting への自動デプロイ(F33・F35〜F37) | 実装中(tasks 13 / 14、ロールバックの確認は後日) |
 | [036-wardrobe-cloud-storage](docs/spec/036-wardrobe-cloud-storage/) | 手持ちの服(写真と index.json)の Cloud Storage への保存。設定で切り替え、既定はローカル(F06) | 実装完了(実バケットで保存・一覧・削除・エージェントの参照を確認済み)/ 画面からの確認と本番での確認待ち |
 | [037-input-guard](docs/spec/037-input-guard/) | 利用者の入力のチェック(プロンプトインジェクション対策と入力の共通チェック) | 実装完了 / ユーザーの確認待ち |
+| [042-privacy-policy](docs/spec/042-privacy-policy/) | プライバシーポリシーの画面(初期ページの一番下のリンクから開く) | 実装完了(ブラウザで確認済み)/ ユーザーの確認待ち |
 
 ---
 

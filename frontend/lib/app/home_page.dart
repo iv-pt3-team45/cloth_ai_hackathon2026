@@ -12,6 +12,7 @@ import '../features/outfit/outfit_controller.dart';
 import '../features/outfit/outfit_progress_view.dart';
 import '../features/outfit/outfit_repository.dart';
 import '../features/outfit/outfit_result_view.dart';
+import '../features/privacy/privacy_policy_screen.dart';
 import '../features/wardrobe/photo_picker.dart';
 import '../features/wardrobe/wardrobe_models.dart';
 import '../features/wardrobe/wardrobe_repository.dart';
@@ -253,6 +254,8 @@ class _HomePageState extends State<HomePage> {
                           picker: widget.photoPicker,
                           onChanged: (c) => setState(() => _clothes = c),
                         ),
+                        // 初期ページの一番下に小さく置く(spec 042)
+                        const PrivacyPolicyLink(),
                       ],
                     ),
                   ),
