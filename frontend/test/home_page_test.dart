@@ -262,6 +262,16 @@ void main() {
             .color,
         Colors.white,
       );
+      // ヘッダーのログインの状態(spec 038)も暗い背景で読める色にする
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text('ゲスト'))
+            .text
+            .style!
+            .color,
+        palette(tester).onBackgroundMuted,
+      );
+      expect(palette(tester).onBackgroundMuted, isNot(AppColors.muted));
     });
 
     testWidgets('どの演出にも当てはまらず色も取れなければ、配色も背景も今のまま(AC-15)', (tester) async {

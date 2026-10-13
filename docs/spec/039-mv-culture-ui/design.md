@@ -185,7 +185,7 @@ class CultureVibe {
 
 **配色が変わる部品**: 背景のグラデーション、ヘッダーのアイコン、段階の Pill、ボタン(ColorScheme.primary)、番号の丸、
 選択中の候補の地と枠、タブの下線、リンク、「考え中」の進み具合のグラデーション。**白いカードの地と本文の文字の色は変えない**(AC-14)。
-暗い背景のときは、カードの外に出る文字(ヘッダーのアプリ名・説明)を `onBackground` にする。
+暗い背景のときは、カードの外に出る文字(ヘッダーのアプリ名・説明、spec 038 のログインの状態 `AccountStatus`)を `onBackground` / `onBackgroundMuted` にする(ログイン・ログアウトのボタンも `onBackground`)。
 
 **動きを減らす設定**: `reduceMotionOf(context)`(§8。Flutter の設定 + Web のブラウザの設定)で判定する。
 有効なら、AnimatedTheme 0ms・VibeBurst なし・VibeBackdrop なし・要点のカードは最初から表示済み・

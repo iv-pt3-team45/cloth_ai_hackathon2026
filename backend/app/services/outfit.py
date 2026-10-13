@@ -26,6 +26,7 @@ from app.schemas.culture import CultureResponse
 from app.schemas.live import LiveCandidate, LiveWeather
 from app.schemas.outfit import OutfitImageResponse, OutfitSuggestion, SuggestedCloth
 from app.schemas.youtube import VideoInfo
+from app.services.auth import Owner
 from app.services.cloth_index import ClothItem
 from app.services.grounding import NO_AFC, clean_list, clean_text, is_quota_error
 from app.services.image_debug import log_image_error, log_image_request, log_image_response
@@ -297,9 +298,24 @@ class OutfitService:
         # store / client / venue_lookup はテストで差し替えるためのもの。
         # 手持ちの服は spec 010 と同じ保存先(WARDROBE_STORAGE で決まる。spec 036)
         self._settings = settings or get_settings()
+        self._store_injected = store is not None
         self._store = store or create_wardrobe_store(self._settings)
         self._client = client
         self._venue_lookup = venue_lookup or get_venue_info
+
+    def for_owner(self, owner: Owner) -> "OutfitService":
+        """持ち主(ログインしたユーザー・ゲスト)の服で提案するサービスを返す(spec 038)。
+
+        保存先をテストで差し替えている場合は、その保存先をそのまま使う。
+        """
+        if self._store_injected:
+            return self
+        return OutfitService(
+            settings=self._settings,
+            store=create_wardrobe_store(self._settings, owner),
+            client=self._client,
+            venue_lookup=self._venue_lookup,
+        )
 
     def _get_client(self) -> genai.Client:
         try:

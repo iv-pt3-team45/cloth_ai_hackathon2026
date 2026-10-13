@@ -76,7 +76,7 @@ jobs:
             --memory 1Gi \
             --cpu 1 \
             --env-vars-file backend/env.deploy.yaml \
-            --set-secrets YOUTUBE_DATA_API_KEY=youtube-data-api-key:latest \
+            --set-secrets YOUTUBE_DATA_API_KEY=youtube-data-api-key:latest,AUTH_SECRET_KEY=auth-secret-key:latest \
             --quiet
 
       # 起動直後は応答が遅いことがあるため、数回までやり直す

@@ -23,6 +23,7 @@ from app.schemas.wardrobe import (
     RegisterRequest,
     WardrobeImage,
 )
+from app.services.auth import Owner
 from app.services.cloth_index import ClothIndexError, ClothItem, analyze_cloth_bytes, normalize_item
 from app.services.grounding import is_quota_error
 from app.services.input_guard import ensure_safe
@@ -167,8 +168,22 @@ class WardrobeService:
         # 保存先は WARDROBE_STORAGE で決まる(既定は CLOTH_INDEX_PATH。spec 036)。
         # チャットのエージェントも同じ保存先を参照する
         self._settings = settings or get_settings()
+        self._store_injected = store is not None
         self._store = store or create_wardrobe_store(self._settings)
         self._client = client
+
+    def for_owner(self, owner: Owner) -> "WardrobeService":
+        """持ち主(ログインしたユーザー・ゲスト)の服を扱うサービスを返す(spec 038)。
+
+        保存先をテストで差し替えている場合は、その保存先をそのまま使う。
+        """
+        if self._store_injected:
+            return self
+        return WardrobeService(
+            settings=self._settings,
+            store=create_wardrobe_store(self._settings, owner),
+            client=self._client,
+        )
 
     def analyze(self, image: WardrobeImage) -> AnalyzeResponse:
         """写真 1 枚を解析して、服ごとの属性を返す。保存はしない。"""

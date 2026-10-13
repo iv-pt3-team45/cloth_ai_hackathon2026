@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../core/auth_session.dart';
 import '../core/reduce_motion.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
+import '../features/auth/login_card.dart';
 import '../features/mv_lookup/culture_repository.dart';
 import '../features/mv_lookup/culture_vibe.dart';
 import '../features/mv_lookup/live_repository.dart';
@@ -49,6 +51,7 @@ class HomePage extends StatefulWidget {
     this.wardrobeRepository,
     this.photoPicker,
     this.outfitRepository,
+    this.authSession,
   });
 
   // テストで差し替える
@@ -60,11 +63,21 @@ class HomePage extends StatefulWidget {
   final PhotoPicker? photoPicker;
   final OutfitRepository? outfitRepository;
 
+  /// ログインの状態(spec 038)。省略時はアプリで 1 つの状態
+  final AuthSession? authSession;
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
+  late final AuthSession _auth = (widget.authSession ?? AuthSession.shared)
+    ..addListener(_onAuthChanged);
+  late String _owner = _auth.ownerKey;
+
+  /// ヘッダの「ログイン」を押した回数(③ のログインの入力欄を開く)
+  int _loginRequest = 0;
+  final _wardrobeKey = GlobalKey();
   late final WardrobeRepository _wardrobe =
       widget.wardrobeRepository ?? WardrobeRepository();
   late final OutfitController _outfit = OutfitController(
@@ -84,7 +97,14 @@ class _HomePageState extends State<HomePage> {
   int _run = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _auth.restore();
+  }
+
+  @override
   void dispose() {
+    _auth.removeListener(_onAuthChanged);
     _outfit
       ..removeListener(_onOutfitChanged)
       ..dispose();
@@ -94,6 +114,40 @@ class _HomePageState extends State<HomePage> {
 
   void _onOutfitChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// ログイン・ログアウトしたら、手持ちの服を読み直し、前の持ち主の服で作った提案を消す。
+  /// ① ② の入力と選択は残す(spec 038 AC-12)。
+  void _onAuthChanged() {
+    if (!mounted) return;
+    final owner = _auth.ownerKey;
+    if (owner == _owner) {
+      setState(() {});
+      return;
+    }
+    _owner = owner;
+    if (_phase != Phase.input) {
+      _run++;
+      _outfit.cancel();
+    }
+    setState(() {
+      _clothes = null;
+      _attempted = false;
+      _notice = null;
+      _phase = Phase.input;
+    });
+  }
+
+  /// ヘッダの「ログイン」: ③ のカードまで移動して、ログインの入力欄を開く。
+  void _openLogin() {
+    setState(() => _loginRequest++);
+    final context = _wardrobeKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 300),
+      );
+    }
   }
 
   List<_Check> get _checklist {
@@ -280,7 +334,13 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _Header(phase: _phase),
+              _Header(
+                phase: _phase,
+                account: AccountStatus(
+                  session: _auth,
+                  onLoginTap: _phase == Phase.input ? _openLogin : null,
+                ),
+              ),
               const SizedBox(height: 16),
               // 入力の段階のカードは、進捗・結果の段階でも破棄せずに隠すだけにする
               // (入力した内容・選んだ候補・取得中の処理を残すため。spec 015 AC-9, AC-14)
@@ -294,6 +354,12 @@ class _HomePageState extends State<HomePage> {
                       MessageBox(
                         color: AppColors.ok,
                         children: [Text(_notice!)],
+                      ),
+                    // ログインの期限切れなど(spec 038)
+                    if (_auth.notice != null)
+                      MessageBox(
+                        color: AppColors.accent,
+                        children: [Text(_auth.notice!)],
                       ),
                     if (missing.isNotEmpty || waitingCulture)
                       MessageBox(
@@ -332,10 +398,21 @@ class _HomePageState extends State<HomePage> {
                       venueRepository: widget.venueRepository,
                       onChanged: (s) => setState(() => _snapshot = s),
                     ),
-                    WardrobeSection(
-                      repository: _wardrobe,
-                      picker: widget.photoPicker,
-                      onChanged: (c) => setState(() => _clothes = c),
+                    // 持ち主(ログイン・ゲスト)が変わったら作り直して一覧を読み直す(spec 038)
+                    KeyedSubtree(
+                      key: _wardrobeKey,
+                      child: WardrobeSection(
+                        key: ValueKey(_owner),
+                        repository: _wardrobe,
+                        picker: widget.photoPicker,
+                        onChanged: (c) => setState(() => _clothes = c),
+                        header: _auth.isUser
+                            ? null
+                            : LoginCard(
+                                session: _auth,
+                                openRequest: _loginRequest,
+                              ),
+                      ),
                     ),
                   ],
                 ),
@@ -347,7 +424,7 @@ class _HomePageState extends State<HomePage> {
                   clothes: suggestion == null
                       ? _clothes ?? const []
                       : [for (final item in suggestion.items) item.cloth],
-                  imageUrl: _wardrobe.imageUrl,
+                  photo: _wardrobe.imageBytes,
                   onCancel: _cancel,
                   imageFailed: _outfit.imageError != null,
                 ),
@@ -360,7 +437,7 @@ class _HomePageState extends State<HomePage> {
                   live: _snapshot.selectedLive,
                   liveResult: _snapshot.liveResult,
                   culture: _snapshot.culture,
-                  imageUrl: _wardrobe.imageUrl,
+                  photo: _wardrobe.imageBytes,
                   onRetryImage: _outfit.retryImage,
                   onRestart: _restart,
                 ),
@@ -372,11 +449,12 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// ヘッダー(アイコン・アプリ名・説明・段階)。
+/// ヘッダー(アイコン・アプリ名・説明・段階・ログインの状態)。
 class _Header extends StatelessWidget {
-  const _Header({required this.phase});
+  const _Header({required this.phase, required this.account});
 
   final Phase phase;
+  final Widget account;
 
   @override
   Widget build(BuildContext context) {
@@ -428,22 +506,32 @@ class _Header extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+        Row(
           children: [
-            for (final (i, (_, label)) in _phases.indexed)
-              Semantics(
-                selected: i == current,
-                child: Pill(
-                  '${i + 1} $label',
-                  color: i == current
-                      ? palette.accent
-                      : (i < current ? AppColors.soft : Colors.white),
-                  textColor: i == current ? Colors.white : AppColors.muted,
-                  bold: i == current,
-                ),
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final (i, (_, label)) in _phases.indexed)
+                    Semantics(
+                      selected: i == current,
+                      child: Pill(
+                        '${i + 1} $label',
+                        color: i == current
+                            ? palette.accent
+                            : (i < current ? AppColors.soft : Colors.white),
+                        textColor: i == current
+                            ? Colors.white
+                            : AppColors.muted,
+                        bold: i == current,
+                      ),
+                    ),
+                ],
               ),
+            ),
+            // ログイン中のユーザー名とログアウト / ゲスト(spec 038)
+            Flexible(child: account),
           ],
         ),
       ],

@@ -13,6 +13,7 @@
 import logging
 import threading
 from collections.abc import Callable
+from datetime import timedelta
 from functools import lru_cache
 
 from google.api_core.exceptions import NotFound, PreconditionFailed
@@ -23,6 +24,7 @@ from app.services.wardrobe_store import (
     IMAGES_DIR_NAME,
     StoredEntry,
     WardrobeStoreError,
+    drop_expired,
     dump_index,
     is_valid_image_name,
     mime_type_of,
@@ -56,7 +58,10 @@ class GcsWardrobeStore:
         prefix: str = "wardrobe",
         project: str = "",
         bucket: Bucket | None = None,
+        max_age: timedelta | None = None,
     ) -> None:
+        # max_age はゲストの服の期限(spec 038)。それより古い服は読まない(書き戻すときに消える)
+        self.max_age = max_age
         # bucket はテストで偽物を渡すためのもの。渡されなければ最初の操作のときに作る
         # (ここではネットワークにつながない。設定の誤りで起動が止まらないようにするため)
         self.bucket_name = bucket_name
@@ -156,7 +161,7 @@ class GcsWardrobeStore:
         if text is None:
             return [], 0
         try:
-            return parse_index(text), generation
+            return drop_expired(parse_index(text), self.max_age), generation
         except Exception as exc:
             raise WardrobeStoreError(
                 f"服のインデックスを読み込めませんでした: gs://{self.bucket_name}/{self.index_path}"

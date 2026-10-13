@@ -2,10 +2,12 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import culture, health, live, outfit, venue, wardrobe, youtube
+from app.api.routes import auth, culture, health, live, outfit, venue, wardrobe, youtube
 
 api_router = APIRouter()
 api_router.include_router(health.router)
+# ログインとゲストの通行証(spec 038)
+api_router.include_router(auth.router)
 # チャット(エージェント)の API は閉じている(spec 037)。画面で使っておらず、
 # 画像・動画の生成ツールで費用がかさむおそれがあるため。
 # 開くときは routes/chat.py の router をここに戻す。エージェントは CLI から使える

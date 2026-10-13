@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:tx_hackathon_gc/core/api_client.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/photo_picker.dart';
@@ -93,6 +94,7 @@ class FakeWardrobeRepository implements WardrobeRepository {
 
   @override
   Future<List<RegisteredCloth>> list() async {
+    listCalls++;
     final error = listError;
     if (error != null) throw error;
     return List.of(items);
@@ -104,10 +106,22 @@ class FakeWardrobeRepository implements WardrobeRepository {
     items.removeWhere((item) => item.id == id);
   }
 
-  // 空にすると一覧はプレースホルダを出す(テストでネットワークから画像を読まないため)
+  /// 一覧を読んだ回数(ログイン・ログアウトで読み直すことの確認用。spec 038)
+  int listCalls = 0;
+
+  /// 取得した写真名(spec 038。写真はトークン付きで取得する)
+  final photoRequests = <String>[];
+
+  // ネットワークから読まず、本物の 1x1 の PNG を返す
   @override
-  String imageUrl(String image) => '';
+  Future<Uint8List> imageBytes(String image) async {
+    photoRequests.add(image);
+    return pngBytes;
+  }
 }
+
+/// 1x1 の PNG を返す写真の取得(画面のテスト用)。
+Future<Uint8List> fakePhoto(String image) async => pngBytes;
 
 /// 決めておいた写真を返す PhotoPicker。
 class FakePhotoPicker implements PhotoPicker {
