@@ -250,3 +250,38 @@ class ErrorText extends StatelessWidget {
   Widget build(BuildContext context) =>
       Text(text, style: const TextStyle(color: AppColors.ng));
 }
+
+/// 画面の背景のグラデーション(MV の配色。spec 039 / 041)。
+///
+/// [child] の後ろに、配色の上 → 下の色で塗る。上に置く `Scaffold` の背景は透明にする。
+class PaletteBackground extends StatelessWidget {
+  const PaletteBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [palette.backgroundTop, palette.backgroundBottom],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// カードの外(背景の上)に置く枠付きボタンの見た目(spec 041)。
+///
+/// 差し色の文字は背景の色によって読めなくなるため、背景用の文字色([AppPalette.onBackground])にする。
+ButtonStyle onBackgroundButtonStyle(BuildContext context) {
+  final palette = AppPalette.of(context);
+  return OutlinedButton.styleFrom(
+    foregroundColor: palette.onBackground,
+    side: BorderSide(color: palette.onBackgroundMuted),
+  );
+}

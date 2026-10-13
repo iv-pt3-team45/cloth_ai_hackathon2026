@@ -220,7 +220,7 @@ tx_hackathon_gc/
 ├── frontend/                 # Flutter
 │   ├── pubspec.yaml
 │   ├── Dockerfile            # dev(ホットリロード) / prod(nginx) の 2 ステージ
-│   ├── web/                  # index.html・manifest.json・アイコン(「はじめてのライブ服」。spec 015)
+│   ├── web/                  # index.html・manifest.json・アイコン(アプリ名「THE FIRST KITAKE」。spec 015 / 041)
 │   ├── lib/
 │   │   ├── main.dart         # テーマとタイトル
 │   │   ├── app/              # home_page.dart(入力 → AIが考え中 → 提案 の 1 画面の流れ)
@@ -252,7 +252,8 @@ tx_hackathon_gc/
 │       ├── 037-input-guard/
 │       ├── 038-user-login/
 │       ├── 039-mv-culture-ui/
-│       └── 040-login-screens/
+│       ├── 040-login-screens/
+│       └── 041-ui-adjustments/
 └── infra/
     └── secrets/              # SA キーを使う例外ケース用(Git 管理外。通常は空)
 ```
@@ -985,7 +986,8 @@ Web アプリは**下部のタブが無い 1 画面**で、上部の段階表示
   - カルチャー情報が届くと、その「よく使う色」と「スタイル」から画面の差し色・背景を切り替え、背景で動きを流す
     (ガーリー・ポップ系 = きらめき / ロック系 = 火花・暗い背景 / ナチュラル・レトロ系 = 花びら / エレクトロ・ストリート系 = ネオン・暗い背景)。
     判定は画面側の辞書との部分一致(`frontend/lib/features/mv_lookup/culture_vibe.dart`)で、当てはまらなければ今の配色のまま。
-    配色は「AIが考え中」「提案」にも引き継ぐ。白いカードの文字の色は変えない。
+    配色は「AIが考え中」「提案」と、ログイン・新規登録・写真の確認(解析)の画面にも引き継ぐ(spec 040 / 041)。白いカードの文字の色は変えない。
+    文字が読めるよう、差し色は白・選んだ項目の地・ページの背景に対して 4.5:1 以上に調整し、カードの外の文字は背景用の色(暗い背景なら白)にする(spec 041)。
   - 端末の「動きを減らす」設定が有効なら、配色だけ変えて動きは出さない(Web はブラウザの `prefers-reduced-motion` を読む)。
   - ①②③ のカードの番号は、入力が済むと緑の ✓ になる。カルチャー情報を調べている間は、① ② の検索の下に操作できない理由を出す。
 
@@ -1243,6 +1245,7 @@ docs/spec/001-user-authentication/
 | [038-user-login](docs/spec/038-user-login/) | ユーザーのログイン(事前に登録したユーザーのみ)と、手持ちの服のユーザーごとの紐づけ。ログインしない人はゲスト(服は 1 日で消える) | 実装完了(ローカルで API と画面を確認済み。本番の準備も完了)/ 本番での確認待ち |
 | [039-mv-culture-ui](docs/spec/039-mv-culture-ui/) | ① の MV カードの整理(要点のカードとポップアップ)と、MV のカルチャーに合わせた配色・背景の演出(画面だけ) | done |
 | [040-login-screens](docs/spec/040-login-screens/) | ログインの専用の画面と、新規登録の画面(画面だけ。登録は受け付けない)。③ のカードはゲストの説明と「ログイン」だけにする | 実装完了(flutter test 通過)/ マージの後にユーザーが画面を確認 |
+| [041-ui-adjustments](docs/spec/041-ui-adjustments/) | 写真の確認(解析)の画面への配色の引き継ぎ、配色による文字の見にくさの解消(コントラスト 4.5:1 以上)、アプリ名を「THE FIRST KITAKE」に変更 | 実装完了(flutter test 通過)/ マージの後にユーザーが画面を確認 |
 
 ---
 

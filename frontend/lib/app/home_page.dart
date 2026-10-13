@@ -273,17 +273,7 @@ class _HomePageState extends State<HomePage> {
       body: Stack(
         children: [
           // 背景のグラデーションと、カードの後ろで流れる動き
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [palette.backgroundTop, palette.backgroundBottom],
-                ),
-              ),
-            ),
-          ),
+          const Positioned.fill(child: PaletteBackground(child: SizedBox())),
           Positioned.fill(
             child: VibeBackdrop(
               effect: vibe?.effect,
@@ -476,7 +466,7 @@ class _Header extends StatelessWidget {
                 children: [
                   // カードの外の文字なので、暗い背景(spec 039)では白にする
                   Text(
-                    'はじめてのライブ服',
+                    'THE FIRST KITAKE',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: palette.onBackground,
@@ -529,11 +519,26 @@ class _Header extends StatelessWidget {
 }
 
 /// 画面下に固定する送信バー(送信前のチェックリスト付き)。
+/// 送信バーの「コーディネートを提案してもらう」(テストで使う)
+const submitButtonKey = ValueKey('submit-outfit');
+
 class _SubmitBar extends StatelessWidget {
   const _SubmitBar({required this.items, required this.onSubmit});
 
   final List<_Check> items;
   final VoidCallback onSubmit;
+
+  /// 入力がそろっていないときの見た目: 薄い差し色の地に、差し色の文字と枠(spec 041)。
+  /// 押せるのは同じ(足りないものを知らせる)。文字は地に対して 4.5:1 以上にする。
+  static ButtonStyle _notReadyStyle(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final text = AppPalette.ensureContrast(palette.accent, palette.selected);
+    return FilledButton.styleFrom(
+      backgroundColor: palette.selected,
+      foregroundColor: text,
+      side: BorderSide(color: text, width: 1.5),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -588,13 +593,8 @@ class _SubmitBar extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   FilledButton(
-                    style: ready
-                        ? null
-                        : FilledButton.styleFrom(
-                            backgroundColor: AppPalette.of(
-                              context,
-                            ).accent.withValues(alpha: 0.55),
-                          ),
+                    key: submitButtonKey,
+                    style: ready ? null : _notReadyStyle(context),
                     onPressed: onSubmit,
                     child: const Text('コーディネートを提案してもらう'),
                   ),

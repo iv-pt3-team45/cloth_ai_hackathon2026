@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import 'photo_picker.dart';
 import 'wardrobe_models.dart';
 import 'wardrobe_repository.dart';
@@ -201,6 +203,7 @@ class _WardrobeReviewScreenState extends State<WardrobeReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final visible = _drafts.where((d) => !d.saved).toList();
     final analyzingIndex = _drafts.indexWhere(
       (d) => d.status == _Status.analyzing,
@@ -211,88 +214,99 @@ class _WardrobeReviewScreenState extends State<WardrobeReviewScreen> {
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _leave();
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('写真の確認'),
-          leading: IconButton(
-            onPressed: _saving ? null : _leave,
-            icon: const Icon(Icons.close),
-            tooltip: 'キャンセル',
+      // 背景は入力の画面と同じ配色のグラデーション。カードの外の文字は onBackground(spec 041)
+      child: PaletteBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            foregroundColor: palette.onBackground,
+            title: Text('写真の確認', style: TextStyle(color: palette.onBackground)),
+            leading: IconButton(
+              onPressed: _saving ? null : _leave,
+              icon: const Icon(Icons.close),
+              color: palette.onBackground,
+              tooltip: 'キャンセル',
+            ),
           ),
-        ),
-        body: Column(
-          children: [
-            if (analyzingIndex >= 0) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Text(
-                  '解析中 ${analyzingIndex + 1} / ${_drafts.length}',
-                  style: theme.textTheme.titleSmall,
+          body: Column(
+            children: [
+              if (analyzingIndex >= 0) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Text(
+                    '解析中 ${analyzingIndex + 1} / ${_drafts.length}',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: palette.onBackground,
+                    ),
+                  ),
+                ),
+                const LinearProgressIndicator(),
+              ],
+              if (_saveError != null)
+                MaterialBanner(
+                  content: Text(_saveError!),
+                  actions: [
+                    TextButton(
+                      onPressed: () => setState(() => _saveError = null),
+                      child: const Text('閉じる'),
+                    ),
+                  ],
+                ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    for (final draft in visible)
+                      _PhotoCard(
+                        key: ObjectKey(draft),
+                        draft: draft,
+                        busy: _busy,
+                        onRetry: () => _analyze(draft),
+                        onChanged: () => setState(() {}),
+                      ),
+                  ],
                 ),
               ),
-              const LinearProgressIndicator(),
             ],
-            if (_saveError != null)
-              MaterialBanner(
-                content: Text(_saveError!),
-                actions: [
-                  TextButton(
-                    onPressed: () => setState(() => _saveError = null),
-                    child: const Text('閉じる'),
-                  ),
-                ],
-              ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(12),
-                children: [
-                  for (final draft in visible)
-                    _PhotoCard(
-                      key: ObjectKey(draft),
-                      draft: draft,
-                      busy: _busy,
-                      onRetry: () => _analyze(draft),
-                      onChanged: () => setState(() {}),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        // 画面下に固定する保存のバー(入力の段階の送信バーと同じ見た目。spec 015)
-        bottomNavigationBar: Material(
-          elevation: 8,
-          color: Colors.white,
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_hasEmptyCategory)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        '種類が空の服があります。種類を入力してください',
-                        style: TextStyle(color: theme.colorScheme.error),
+          ),
+          // 画面下に固定する保存のバー(入力の段階の送信バーと同じ見た目。spec 015)
+          bottomNavigationBar: Material(
+            elevation: 8,
+            color: Colors.white,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_hasEmptyCategory)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          '種類が空の服があります。種類を入力してください',
+                          style: TextStyle(color: theme.colorScheme.error),
+                        ),
+                      ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _busy || count == 0 || _hasEmptyCategory
+                            ? null
+                            : _save,
+                        icon: _saving
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save),
+                        label: Text(count == 0 ? '保存する服がありません' : '$count 点を保存'),
                       ),
                     ),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _busy || count == 0 || _hasEmptyCategory
-                          ? null
-                          : _save,
-                      icon: _saving
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save),
-                      label: Text(count == 0 ? '保存する服がありません' : '$count 点を保存'),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

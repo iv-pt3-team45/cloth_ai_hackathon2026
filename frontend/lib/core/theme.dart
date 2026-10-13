@@ -65,30 +65,65 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// 暗い背景か
   final bool dark;
 
-  /// 差し色 2 つから配色を作る。差し色は白い文字が読める濃さに調整する。
+  /// 差し色 2 つから配色を作る。
+  ///
+  /// 差し色は白い文字が読める濃さに調整する。明るい配色では、差し色を文字として置く背景
+  /// (選んだ項目の地・ページの背景)に対しても 4.5:1 以上になるまで濃くする(spec 041)。
   factory AppPalette.fromAccents(
     Color accent,
     Color? accent2, {
     bool dark = false,
   }) {
-    final main = readableOnWhite(accent);
-    var second = readableOnWhite(accent2 ?? shiftHue(accent, 40));
+    Color selectedOf(Color main) => Color.lerp(main, Colors.white, 0.92)!;
+    Color topOf(Color main) => dark
+        ? Color.lerp(const Color(0xFF1A1420), main, 0.15)!
+        : Color.lerp(main, Colors.white, 0.85)!;
+    Color bottomOf(Color second) => dark
+        ? Color.lerp(const Color(0xFF0E0B12), second, 0.12)!
+        : Color.lerp(second, Colors.white, 0.95)!;
+
+    // 暗い配色では差し色を背景の上の文字に使わない(白い文字を載せる地にだけ使う)
+    final main = dark
+        ? readableOnWhite(accent)
+        : _darkenUntil(accent, (c) => [Colors.white, selectedOf(c), topOf(c)]);
+    Color second0(Color c) => dark
+        ? readableOnWhite(c)
+        : _darkenUntil(
+            c,
+            (s) => [Colors.white, selectedOf(main), topOf(main), bottomOf(s)],
+          );
+    var second = second0(accent2 ?? shiftHue(accent, 40));
     // 2 色が同じだとグラデーションにならないため、色相をずらす
-    if (second == main) second = readableOnWhite(shiftHue(accent, 40));
+    if (second == main) second = second0(shiftHue(accent, 40));
+
+    final top = topOf(main);
+    final bottom = bottomOf(second);
     return AppPalette(
       accent: main,
       accent2: second,
-      selected: Color.lerp(main, Colors.white, 0.92)!,
-      backgroundTop: dark
-          ? Color.lerp(const Color(0xFF1A1420), main, 0.15)!
-          : Color.lerp(main, Colors.white, 0.85)!,
-      backgroundBottom: dark
-          ? Color.lerp(const Color(0xFF0E0B12), second, 0.12)!
-          : Color.lerp(second, Colors.white, 0.95)!,
+      selected: selectedOf(main),
+      backgroundTop: top,
+      backgroundBottom: bottom,
       onBackground: dark ? Colors.white : AppColors.text,
-      onBackgroundMuted: dark ? Colors.white70 : AppColors.muted,
+      onBackgroundMuted: dark
+          ? Colors.white70
+          : ensureContrast(ensureContrast(AppColors.muted, top), bottom),
       dark: dark,
     );
+  }
+
+  /// [color] の明度を下げていき、[backgrounds] のすべてに対して 4.5:1 以上になったら止める。
+  /// 背景が色そのものから作られる場合に備えて、背景は毎回 [backgrounds] で作り直す。
+  static Color _darkenUntil(
+    Color color,
+    List<Color> Function(Color) backgrounds,
+  ) {
+    var hsl = HSLColor.fromColor(color);
+    bool ok(Color c) => backgrounds(c).every((bg) => contrast(c, bg) >= 4.5);
+    while (!ok(hsl.toColor()) && hsl.lightness > 0) {
+      hsl = hsl.withLightness((hsl.lightness - 0.02).clamp(0, 1));
+    }
+    return hsl.toColor();
   }
 
   /// 画面の配色(テーマに無ければ標準)
@@ -96,17 +131,32 @@ class AppPalette extends ThemeExtension<AppPalette> {
       Theme.of(context).extension<AppPalette>() ?? standard;
 
   /// 白い文字とのコントラストが 4.5:1 以上になるまで明度を下げる。
-  static Color readableOnWhite(Color color) {
-    var hsl = HSLColor.fromColor(color);
-    while (contrastWithWhite(hsl.toColor()) < 4.5 && hsl.lightness > 0) {
-      hsl = hsl.withLightness((hsl.lightness - 0.02).clamp(0, 1));
+  static Color readableOnWhite(Color color) =>
+      ensureContrast(color, Colors.white);
+
+  /// 白とのコントラスト比(WCAG)
+  static double contrastWithWhite(Color color) => contrast(color, Colors.white);
+
+  /// 2 色のコントラスト比(WCAG)。1〜21。
+  static double contrast(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final (hi, lo) = la > lb ? (la, lb) : (lb, la);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /// [fg] を [bg] に対して [min] 以上の比になるまで調整する(spec 041)。
+  /// [bg] が明るければ [fg] の明度を下げ、暗ければ上げる。足りていればそのまま返す。
+  static Color ensureContrast(Color fg, Color bg, {double min = 4.5}) {
+    final lighten = bg.computeLuminance() < 0.18;
+    var hsl = HSLColor.fromColor(fg);
+    while (contrast(hsl.toColor(), bg) < min &&
+        (lighten ? hsl.lightness < 1 : hsl.lightness > 0)) {
+      final next = hsl.lightness + (lighten ? 0.02 : -0.02);
+      hsl = hsl.withLightness(next.clamp(0, 1));
     }
     return hsl.toColor();
   }
-
-  /// 白とのコントラスト比(WCAG)
-  static double contrastWithWhite(Color color) =>
-      1.05 / (color.computeLuminance() + 0.05);
 
   /// 色相を [degrees] 度ずらした色
   static Color shiftHue(Color color, double degrees) {
