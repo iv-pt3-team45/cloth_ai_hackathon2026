@@ -5,6 +5,7 @@ import '../core/reduce_motion.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../features/auth/login_card.dart';
+import '../features/auth/login_page.dart';
 import '../features/mv_lookup/culture_repository.dart';
 import '../features/mv_lookup/culture_vibe.dart';
 import '../features/mv_lookup/live_repository.dart';
@@ -75,9 +76,6 @@ class _HomePageState extends State<HomePage> {
     ..addListener(_onAuthChanged);
   late String _owner = _auth.ownerKey;
 
-  /// ヘッダの「ログイン」を押した回数(③ のログインの入力欄を開く)
-  int _loginRequest = 0;
-  final _wardrobeKey = GlobalKey();
   late final WardrobeRepository _wardrobe =
       widget.wardrobeRepository ?? WardrobeRepository();
   late final OutfitController _outfit = OutfitController(
@@ -138,17 +136,10 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  /// ヘッダの「ログイン」: ③ のカードまで移動して、ログインの入力欄を開く。
-  void _openLogin() {
-    setState(() => _loginRequest++);
-    final context = _wardrobeKey.currentContext;
-    if (context != null) {
-      Scrollable.ensureVisible(
-        context,
-        duration: const Duration(milliseconds: 300),
-      );
-    }
-  }
+  /// ヘッダ・③ の「ログイン」: ログイン画面を重ねて開く(spec 040)。
+  /// [context] は配色(spec 039)の内側のものを渡し、ログイン画面に配色を引き継ぐ。
+  /// ログインした後の服の読み直しは [_onAuthChanged] が行う。
+  void _openLogin(BuildContext context) => openLoginPage(context, _auth);
 
   List<_Check> get _checklist {
     final clothes = _clothes ?? const [];
@@ -303,6 +294,7 @@ class _HomePageState extends State<HomePage> {
           SafeArea(
             bottom: false,
             child: _buildBody(
+              context,
               checklist: checklist,
               missing: missing,
               waitingCulture: waitingCulture,
@@ -318,7 +310,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildBody({
+  Widget _buildBody(
+    BuildContext context, {
     required List<_Check> checklist,
     required List<String> missing,
     required bool waitingCulture,
@@ -338,7 +331,9 @@ class _HomePageState extends State<HomePage> {
                 phase: _phase,
                 account: AccountStatus(
                   session: _auth,
-                  onLoginTap: _phase == Phase.input ? _openLogin : null,
+                  onLoginTap: _phase == Phase.input
+                      ? () => _openLogin(context)
+                      : null,
                 ),
               ),
               const SizedBox(height: 16),
@@ -399,20 +394,14 @@ class _HomePageState extends State<HomePage> {
                       onChanged: (s) => setState(() => _snapshot = s),
                     ),
                     // 持ち主(ログイン・ゲスト)が変わったら作り直して一覧を読み直す(spec 038)
-                    KeyedSubtree(
-                      key: _wardrobeKey,
-                      child: WardrobeSection(
-                        key: ValueKey(_owner),
-                        repository: _wardrobe,
-                        picker: widget.photoPicker,
-                        onChanged: (c) => setState(() => _clothes = c),
-                        header: _auth.isUser
-                            ? null
-                            : LoginCard(
-                                session: _auth,
-                                openRequest: _loginRequest,
-                              ),
-                      ),
+                    WardrobeSection(
+                      key: ValueKey(_owner),
+                      repository: _wardrobe,
+                      picker: widget.photoPicker,
+                      onChanged: (c) => setState(() => _clothes = c),
+                      header: _auth.isUser
+                          ? null
+                          : LoginCard(onLoginTap: () => _openLogin(context)),
                     ),
                   ],
                 ),
