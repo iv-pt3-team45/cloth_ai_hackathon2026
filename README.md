@@ -1312,6 +1312,17 @@ git pull
 git branch -d feat/001-user-authentication
 ```
 
+**gh を使わずに Web 画面で PR を作る / マージする場合**(6. の代わり)
+
+1. push すると表示される `https://github.com/<組織>/<リポジトリ>/pull/new/<ブランチ名>` を開く
+   (リポジトリのトップに出る黄色い帯「… had recent pushes」の **Compare & pull request** でもよい)。
+2. 上部が `base: main` ← `compare: <ブランチ名>` になっていることを確かめる。
+3. タイトル(`<種別>: <日本語の説明>`。8.5)と本文を入れて **Create pull request**。
+4. PR の画面の下で CI(backend / frontend / docker)が 3 つとも緑になったら **Merge pull request** → **Confirm merge**。
+   Extended description がタイトルとくっついていたら、読みやすく直してよい。
+5. コンフリクト(This branch has conflicts)が出たら、手元で `git merge origin/main` して解消し、push し直す(8.4)。
+6. マージ後、Actions タブの **Deploy** が緑になれば本番に反映済み(4.13)。
+
 ### 8.4 よく使うコマンド
 
 **確認する**
