@@ -11,6 +11,7 @@ class SectionCard extends StatelessWidget {
     required this.children,
     this.title,
     this.step,
+    this.done = false,
     this.trailing,
   });
 
@@ -18,6 +19,9 @@ class SectionCard extends StatelessWidget {
 
   /// 見出しの前に出す番号(入力画面の ①②③)
   final int? step;
+
+  /// 入力が済んだか。済んだら番号の丸を緑の ✓ にする(spec 039)
+  final bool done;
   final Widget? trailing;
   final List<Widget> children;
 
@@ -50,17 +54,7 @@ class SectionCard extends StatelessWidget {
                   child: Row(
                     children: [
                       if (step != null) ...[
-                        CircleAvatar(
-                          radius: 13,
-                          backgroundColor: AppColors.accent,
-                          child: Text(
-                            '$step',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
+                        StepBadge(step: step!, done: done),
                         const SizedBox(width: 8),
                       ],
                       Expanded(
@@ -78,6 +72,32 @@ class SectionCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 入力画面の ①②③ の番号の丸。済んだら緑の ✓ にする(spec 039)。
+class StepBadge extends StatelessWidget {
+  const StepBadge({super.key, required this.step, required this.done});
+
+  final int step;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: done ? '$step 済み' : '$step',
+      excludeSemantics: true,
+      child: CircleAvatar(
+        radius: 13,
+        backgroundColor: done ? AppColors.ok : AppPalette.of(context).accent,
+        child: done
+            ? const Icon(Icons.check, size: 16, color: Colors.white)
+            : Text(
+                '$step',
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
       ),
     );
   }
@@ -185,7 +205,8 @@ class MessageBox extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 16),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.08),
+      // 暗い背景(spec 039)の上でも読めるよう、白の下地に色を重ねる
+      color: Color.alphaBlend(color.withValues(alpha: 0.08), Colors.white),
       border: Border.all(color: color.withValues(alpha: 0.5)),
       borderRadius: BorderRadius.circular(12),
     ),

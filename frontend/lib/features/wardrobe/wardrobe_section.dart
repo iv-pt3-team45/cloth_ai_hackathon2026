@@ -187,6 +187,7 @@ class _WardrobeSectionState extends State<WardrobeSection> {
     final items = _items;
     return SectionCard(
       step: 3,
+      done: items != null && items.isNotEmpty,
       title: '手持ちの服',
       trailing: items == null
           ? null

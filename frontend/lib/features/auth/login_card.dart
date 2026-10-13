@@ -187,30 +187,46 @@ class AccountStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // カードの外(ヘッダ)に出すので、暗い背景(spec 039)では白系の文字にする
+    final palette = AppPalette.of(context);
+    final button = palette.dark
+        ? TextButton.styleFrom(foregroundColor: palette.onBackground)
+        : null;
     final userId = session.userId;
     if (userId == null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('ゲスト', style: TextStyle(color: AppColors.muted)),
+          Text('ゲスト', style: TextStyle(color: palette.onBackgroundMuted)),
           if (onLoginTap != null)
-            TextButton(onPressed: onLoginTap, child: const Text('ログイン')),
+            TextButton(
+              style: button,
+              onPressed: onLoginTap,
+              child: const Text('ログイン'),
+            ),
         ],
       );
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.person, size: 18, color: AppColors.muted),
+        Icon(Icons.person, size: 18, color: palette.onBackgroundMuted),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
             userId,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: palette.onBackground,
+            ),
           ),
         ),
-        TextButton(onPressed: session.logout, child: const Text('ログアウト')),
+        TextButton(
+          style: button,
+          onPressed: session.logout,
+          child: const Text('ログアウト'),
+        ),
       ],
     );
   }
