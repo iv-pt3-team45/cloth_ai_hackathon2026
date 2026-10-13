@@ -11,6 +11,7 @@ class SectionCard extends StatelessWidget {
     required this.children,
     this.title,
     this.step,
+    this.done = false,
     this.trailing,
   });
 
@@ -18,6 +19,9 @@ class SectionCard extends StatelessWidget {
 
   /// 見出しの前に出す番号(入力画面の ①②③)
   final int? step;
+
+  /// 入力が済んだか。済んだら番号の丸を緑の ✓ にする(spec 039)
+  final bool done;
   final Widget? trailing;
   final List<Widget> children;
 
@@ -50,17 +54,7 @@ class SectionCard extends StatelessWidget {
                   child: Row(
                     children: [
                       if (step != null) ...[
-                        CircleAvatar(
-                          radius: 13,
-                          backgroundColor: AppColors.accent,
-                          child: Text(
-                            '$step',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
+                        StepBadge(step: step!, done: done),
                         const SizedBox(width: 8),
                       ],
                       Expanded(
@@ -78,6 +72,32 @@ class SectionCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 入力画面の ①②③ の番号の丸。済んだら緑の ✓ にする(spec 039)。
+class StepBadge extends StatelessWidget {
+  const StepBadge({super.key, required this.step, required this.done});
+
+  final int step;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: done ? '$step 済み' : '$step',
+      excludeSemantics: true,
+      child: CircleAvatar(
+        radius: 13,
+        backgroundColor: done ? AppColors.ok : AppPalette.of(context).accent,
+        child: done
+            ? const Icon(Icons.check, size: 16, color: Colors.white)
+            : Text(
+                '$step',
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
       ),
     );
   }
@@ -185,7 +205,8 @@ class MessageBox extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 16),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.08),
+      // 暗い背景(spec 039)の上でも読めるよう、白の下地に色を重ねる
+      color: Color.alphaBlend(color.withValues(alpha: 0.08), Colors.white),
       border: Border.all(color: color.withValues(alpha: 0.5)),
       borderRadius: BorderRadius.circular(12),
     ),
@@ -228,4 +249,39 @@ class ErrorText extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Text(text, style: const TextStyle(color: AppColors.ng));
+}
+
+/// 画面の背景のグラデーション(MV の配色。spec 039 / 041)。
+///
+/// [child] の後ろに、配色の上 → 下の色で塗る。上に置く `Scaffold` の背景は透明にする。
+class PaletteBackground extends StatelessWidget {
+  const PaletteBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [palette.backgroundTop, palette.backgroundBottom],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// カードの外(背景の上)に置く枠付きボタンの見た目(spec 041)。
+///
+/// 差し色の文字は背景の色によって読めなくなるため、背景用の文字色([AppPalette.onBackground])にする。
+ButtonStyle onBackgroundButtonStyle(BuildContext context) {
+  final palette = AppPalette.of(context);
+  return OutlinedButton.styleFrom(
+    foregroundColor: palette.onBackground,
+    side: BorderSide(color: palette.onBackgroundMuted),
+  );
 }

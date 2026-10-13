@@ -13,6 +13,23 @@ Future<bool> _launch(Uri url) =>
 @visibleForTesting
 UrlOpener openUrl = _launch;
 
+/// 外部のページを開く。開けなければ「リンクを開けませんでした」と SnackBar で知らせる。
+Future<void> openExternalUrl(BuildContext context, String url) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final uri = Uri.tryParse(url);
+  var opened = false;
+  if (uri != null) {
+    try {
+      opened = await openUrl(uri);
+    } on Exception {
+      opened = false;
+    }
+  }
+  if (!opened) {
+    messenger?.showSnackBar(const SnackBar(content: Text('リンクを開けませんでした')));
+  }
+}
+
 /// タップで外部のページを開くリンク(出典など。spec 015)。
 class ExternalLink extends StatelessWidget {
   const ExternalLink({super.key, required this.label, required this.url});
@@ -20,35 +37,20 @@ class ExternalLink extends StatelessWidget {
   final String label;
   final String url;
 
-  Future<void> _open(BuildContext context) async {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    final uri = Uri.tryParse(url);
-    var opened = false;
-    if (uri != null) {
-      try {
-        opened = await openUrl(uri);
-      } on Exception {
-        opened = false;
-      }
-    }
-    if (!opened) {
-      messenger?.showSnackBar(const SnackBar(content: Text('リンクを開けませんでした')));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final color = AppPalette.of(context).accent2;
     return Semantics(
       link: true,
       child: InkWell(
-        onTap: () => _open(context),
+        onTap: () => openExternalUrl(context, url),
         child: Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            color: AppColors.accent2,
+            color: color,
             decoration: TextDecoration.underline,
-            decorationColor: AppColors.accent2,
+            decorationColor: color,
           ),
         ),
       ),

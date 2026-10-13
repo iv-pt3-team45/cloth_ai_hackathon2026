@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../core/themed_route.dart';
 import '../../core/widgets.dart';
 import 'privacy_policy.dart';
 
 const privacyPolicyLinkKey = Key('privacy-policy-link');
 
 /// 初期ページの一番下に置く、小さな灰色のリンク(spec 042)。押すとポリシーの画面を開く。
+///
+/// カードの外(背景の上)に置くため、文字は背景用の薄い色(暗い背景では明るい色。spec 041)にする。
 class PrivacyPolicyLink extends StatelessWidget {
   const PrivacyPolicyLink({super.key});
 
@@ -16,16 +19,16 @@ class PrivacyPolicyLink extends StatelessWidget {
       child: TextButton(
         key: privacyPolicyLinkKey,
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.muted,
+          foregroundColor: AppPalette.of(context).onBackgroundMuted,
           minimumSize: const Size(48, 40),
           textStyle: const TextStyle(
             fontSize: 12,
             decoration: TextDecoration.underline,
           ),
         ),
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const PrivacyPolicyScreen()),
-        ),
+        // 入力の画面の配色(MV に合わせた配色)を引き継いで開く
+        onPressed: () =>
+            pushThemed<void>(context, (_) => const PrivacyPolicyScreen()),
         child: const Text('プライバシーポリシー'),
       ),
     );
@@ -38,23 +41,36 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('プライバシーポリシー')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 880),
-              // 全文を 1 つの白い枠にまとめる(節ごとに枠を分けない)
-              child: SectionCard(
-                children: [
-                  const Text(policyIntro),
-                  const SizedBox(height: 4),
-                  const Hint('制定日: $policyEstablished'),
-                  for (final (index, section) in policySections.indexed)
-                    _SectionView(number: index + 1, section: section),
-                ],
+    final palette = AppPalette.of(context);
+    return PaletteBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: palette.onBackground,
+          title: Text(
+            'プライバシーポリシー',
+            style: TextStyle(color: palette.onBackground),
+          ),
+        ),
+        body: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 880),
+                // 全文を 1 つの白い枠にまとめる(節ごとに枠を分けない)
+                child: SectionCard(
+                  children: [
+                    const Text(policyIntro),
+                    const SizedBox(height: 4),
+                    const Hint('制定日: $policyEstablished'),
+                    for (final (index, section) in policySections.indexed)
+                      _SectionView(number: index + 1, section: section),
+                  ],
+                ),
               ),
             ),
           ),

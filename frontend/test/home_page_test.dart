@@ -1,19 +1,25 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/app/home_page.dart';
 import 'package:tx_hackathon_gc/core/api_client.dart';
 import 'package:tx_hackathon_gc/core/theme.dart';
 import 'package:tx_hackathon_gc/core/widgets.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/culture_models.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/culture_section.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/culture_vibe.dart';
+import 'package:tx_hackathon_gc/features/mv_lookup/vibe_backdrop.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/live_section.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/outfit_models.dart';
 import 'package:tx_hackathon_gc/features/privacy/privacy_policy_screen.dart';
+import 'package:tx_hackathon_gc/features/wardrobe/photo_picker.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_models.dart';
+import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_review_screen.dart';
 import 'package:tx_hackathon_gc/main.dart';
 
 import 'mv_lookup_fakes.dart';
@@ -26,15 +32,29 @@ class _Fakes {
     List<RegisteredCloth> clothes = const [ownedShirt, ownedJeans],
     Future<CultureReport> Function(MvVideo video)? culture,
     FakeOutfitRepository? outfit,
+    List<PickedPhoto> photos = const [],
   }) : mv = FakeMvRepository(
-         (query) async =>
-             const MvLookupResult(inputType: 'url', video: confirmVideo),
+         // URL なら動画、MV 名なら候補 1 件(候補を選ぶと URL で問い合わせ直す)
+         (query) async => query.startsWith('https://')
+             ? const MvLookupResult(inputType: 'url', video: confirmVideo)
+             : const MvLookupResult(
+                 inputType: 'keyword',
+                 candidates: [
+                   MvCandidate(
+                     videoId: 'abcDEF12345',
+                     url: 'https://www.youtube.com/watch?v=abcDEF12345',
+                     title: 'YOASOBI「アイドル」 Official Music Video',
+                     channelTitle: 'YOASOBI',
+                   ),
+                 ],
+               ),
        ),
        culture = FakeCultureRepository(culture ?? (video) async => fullReport),
        live = FakeLiveRepository(),
        venue = FakeVenueRepository(),
        wardrobe = FakeWardrobeRepository(items: clothes),
-       outfit = outfit ?? FakeOutfitRepository();
+       outfit = outfit ?? FakeOutfitRepository(),
+       picker = FakePhotoPicker(photos);
 
   final FakeMvRepository mv;
   final FakeCultureRepository culture;
@@ -42,16 +62,27 @@ class _Fakes {
   final FakeVenueRepository venue;
   final FakeWardrobeRepository wardrobe;
   final FakeOutfitRepository outfit;
+  final FakePhotoPicker picker;
 }
 
+/// 画面を出す。
+///
+/// 演出の背景の動き(spec 039)は止まらないため、既定では端末の「動きを減らす」を有効にして
+/// pumpAndSettle が終わるようにする。動きを確かめるテストだけ [reduceMotion] を false にする。
 Future<void> _pump(
   WidgetTester tester,
   _Fakes fakes, {
   Size size = const Size(1200, 6000),
+  bool reduceMotion = true,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  if (reduceMotion) {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+  }
   await tester.pumpWidget(
     MaterialApp(
       theme: buildTheme(),
@@ -61,7 +92,7 @@ Future<void> _pump(
         liveRepository: fakes.live,
         venueRepository: fakes.venue,
         wardrobeRepository: fakes.wardrobe,
-        photoPicker: FakePhotoPicker([]),
+        photoPicker: fakes.picker,
         outfitRepository: fakes.outfit,
       ),
     ),
@@ -106,7 +137,7 @@ void main() {
     await _pump(tester, _Fakes());
 
     expect(find.byType(NavigationBar), findsNothing);
-    expect(find.text('はじめてのライブ服'), findsOneWidget);
+    expect(find.text('THE FIRST KITAKE'), findsOneWidget);
     expect(find.text('1 入力'), findsOneWidget);
     expect(find.text('2 AIが考え中'), findsOneWidget);
     expect(find.text('3 提案'), findsOneWidget);
@@ -123,10 +154,364 @@ void main() {
     expect(find.byKey(privacyPolicyLinkKey), findsOneWidget);
   });
 
+  testWidgets('入力が済んだカードの番号の丸は緑の ✓ になる(spec 039 AC-18)', (tester) async {
+    await _pump(tester, _Fakes(clothes: const []));
+
+    bool done(int step) => tester
+        .widget<StepBadge>(
+          find.byWidgetPredicate((w) => w is StepBadge && w.step == step),
+        )
+        .done;
+    expect([done(1), done(2), done(3)], [false, false, false]);
+    expect(find.byIcon(Icons.check), findsNothing);
+
+    await _selectMv(tester);
+    expect([done(1), done(2), done(3)], [true, false, false]);
+
+    await _selectLive(tester);
+    expect([done(1), done(2), done(3)], [true, true, false]);
+    expect(find.bySemanticsLabel('1 済み'), findsOneWidget);
+    expect(find.bySemanticsLabel('3'), findsOneWidget);
+  });
+
+  testWidgets('服が 1 点以上あれば ③ は最初から ✓(spec 039 AC-18)', (tester) async {
+    await _pump(tester, _Fakes());
+
+    final badge = tester.widget<StepBadge>(
+      find.byWidgetPredicate((w) => w is StepBadge && w.step == 3),
+    );
+    expect(badge.done, isTrue);
+  });
+
+  group('MV のカルチャーに合わせた演出(spec 039 D)', () {
+    CultureReport report({
+      List<String> styles = const [],
+      List<String> colors = const [],
+    }) => CultureReport(
+      artist: 'YOASOBI',
+      identified: true,
+      fashion: FashionInfo(styles: styles, colors: colors),
+    );
+
+    AppPalette palette(WidgetTester tester) =>
+        AppPalette.of(tester.element(find.text('MV を選ぶ')));
+    VibeBackdrop backdrop(WidgetTester tester) =>
+        tester.widget<VibeBackdrop>(find.byType(VibeBackdrop));
+
+    /// 動きを止めずに、① で URL から動画を出してカルチャー情報が届くまで進める
+    Future<void> selectMvAnimated(WidgetTester tester) async {
+      await tester.enterText(
+        find.byKey(mvQueryFieldKey),
+        'https://youtu.be/abc',
+      );
+      await tester.tap(find.byKey(mvSearchButtonKey));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+    }
+
+    testWidgets('ガーリー → 差し色がよく使う色になり、きらめきが流れる。色が 1 回だけ広がる(AC-13)', (
+      tester,
+    ) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ガーリー'], colors: ['ピンク']),
+      );
+      await _pump(tester, fakes, reduceMotion: false);
+      expect(palette(tester), AppPalette.standard);
+      expect(backdrop(tester).running, isFalse);
+
+      await selectMvAnimated(tester);
+
+      // 切り替わりの演出が 1 回だけ出て、消える
+      expect(find.byType(VibeBurst), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.byType(VibeBurst), findsNothing);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(VibeBurst), findsNothing);
+
+      final expected = AppPalette.fromAccents(
+        CultureVibe.colorOf('ピンク')!,
+        null,
+      ).accent;
+      expect(palette(tester).accent, expected);
+      expect(palette(tester).dark, isFalse);
+      expect(
+        Theme.of(tester.element(find.text('MV を選ぶ'))).colorScheme.primary,
+        expected,
+      );
+      expect(backdrop(tester).effect, VibeEffect.sparkle);
+      expect(backdrop(tester).running, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('ロック → 背景が暗くなり火花が流れる。白いカードの文字の色は変わらない(AC-14)', (tester) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ロック'], colors: ['赤']),
+      );
+      await _pump(tester, fakes, reduceMotion: false);
+      Color titleColor() => tester
+          .renderObject<RenderParagraph>(find.text('MV を選ぶ'))
+          .text
+          .style!
+          .color!;
+      final before = titleColor();
+
+      await selectMvAnimated(tester);
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(palette(tester).dark, isTrue);
+      expect(palette(tester).backgroundTop.computeLuminance(), lessThan(0.1));
+      expect(backdrop(tester).effect, VibeEffect.sparks);
+      expect(titleColor(), before);
+      expect(titleColor(), AppColors.text);
+      // ヘッダーのアプリ名(カードの外)は白にして読めるようにする
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text('THE FIRST KITAKE'))
+            .text
+            .style!
+            .color,
+        Colors.white,
+      );
+      // ヘッダーのログインの状態(spec 038)も暗い背景で読める色にする
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text('ゲスト'))
+            .text
+            .style!
+            .color,
+        palette(tester).onBackgroundMuted,
+      );
+      expect(palette(tester).onBackgroundMuted, isNot(AppColors.muted));
+    });
+
+    testWidgets('どの演出にも当てはまらず色も取れなければ、配色も背景も今のまま(AC-15)', (tester) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['エレガント'], colors: ['玉虫色']),
+      );
+      await _pump(tester, fakes, reduceMotion: false);
+
+      await selectMvAnimated(tester);
+      expect(find.byType(VibeBurst), findsNothing);
+      await tester.pumpAndSettle();
+
+      expect(palette(tester), AppPalette.standard);
+      expect(backdrop(tester).effect, isNull);
+      expect(find.byType(CultureSummaryCard), findsOneWidget);
+    });
+
+    testWidgets('① の「変更」で選択を外すと、元の配色に戻り背景が止まる(AC-16)', (tester) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ナチュラル'], colors: ['緑']),
+      );
+      await _pump(tester, fakes);
+      await tester.enterText(find.byKey(mvQueryFieldKey), 'アイドル');
+      await tester.tap(find.byKey(mvSearchButtonKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('YOASOBI「アイドル」 Official Music Video'));
+      await tester.pumpAndSettle();
+      expect(backdrop(tester).effect, VibeEffect.petals);
+      expect(palette(tester), isNot(AppPalette.standard));
+
+      await tester.tap(find.text('変更'));
+      await tester.pumpAndSettle();
+
+      expect(palette(tester), AppPalette.standard);
+      expect(backdrop(tester).effect, isNull);
+      expect(backdrop(tester).running, isFalse);
+    });
+
+    testWidgets('動きを減らす設定では、配色だけ変わり、動きと切り替わりの演出は出ない(AC-17)', (tester) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ガーリー'], colors: ['ピンク']),
+      );
+      await _pump(tester, fakes);
+
+      await tester.enterText(
+        find.byKey(mvQueryFieldKey),
+        'https://youtu.be/abc',
+      );
+      await tester.tap(find.byKey(mvSearchButtonKey));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(VibeBurst), findsNothing);
+      await tester.pumpAndSettle();
+
+      expect(
+        palette(tester).accent,
+        AppPalette.fromAccents(CultureVibe.colorOf('ピンク')!, null).accent,
+      );
+      expect(backdrop(tester).effect, VibeEffect.sparkle);
+      expect(backdrop(tester).running, isFalse);
+    });
+
+    testWidgets('「考え中」の段階にも配色が引き継がれる(AC-21)', (tester) async {
+      final suggestion = Completer<OutfitSuggestion>();
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ポップ'], colors: ['水色']),
+        outfit: FakeOutfitRepository(suggestResponder: () => suggestion.future),
+      );
+      await _pump(tester, fakes);
+      await _selectMv(tester);
+      await _selectLive(tester);
+      final accent = palette(tester).accent;
+      expect(accent, isNot(AppColors.accent));
+
+      await _press(tester);
+
+      final progress = tester.element(find.text('手持ちの服から、行くライブに合うコーデを考えています'));
+      expect(AppPalette.of(progress).accent, accent);
+      expect(Theme.of(progress).colorScheme.primary, accent);
+      expect(backdrop(tester).effect, VibeEffect.sparkle);
+
+      suggestion.complete(suggestionOf('ポップなコーデ'));
+      await _waitResult(tester);
+      final result = tester.element(find.text('ポップなコーデ'));
+      expect(AppPalette.of(result).accent, accent);
+    });
+  });
+
+  group('画面の調整(spec 041)', () {
+    CultureReport report({
+      List<String> styles = const [],
+      List<String> colors = const [],
+    }) => CultureReport(
+      artist: 'YOASOBI',
+      identified: true,
+      fashion: FashionInfo(styles: styles, colors: colors),
+    );
+    AppPalette homePalette(WidgetTester tester) =>
+        AppPalette.of(tester.element(find.text('MV を選ぶ')));
+    double contrast(Color a, Color b) => AppPalette.contrast(a, b);
+    Color textColor(WidgetTester tester, String text) => tester
+        .renderObject<RenderParagraph>(find.text(text).last)
+        .text
+        .style!
+        .color!;
+
+    Future<void> openReview(WidgetTester tester) async {
+      await tester.tap(find.text('写真を選ぶ'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WardrobeReviewScreen), findsOneWidget);
+    }
+
+    testWidgets('MV で配色が変わった状態で写真を入れると、解析の画面も同じ配色になる(AC-1, AC-3)', (
+      tester,
+    ) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ロック'], colors: ['紺']),
+        photos: [photo('a.png')],
+      );
+      await _pump(tester, fakes);
+      await _selectMv(tester);
+      final home = homePalette(tester);
+      expect(home.dark, isTrue);
+
+      await openReview(tester);
+
+      final review = AppPalette.of(tester.element(find.text('写真の確認')));
+      expect(review, home);
+      // カードの外の文字(タイトル)は背景用の色で、暗い背景に対して読める
+      final title = textColor(tester, '写真の確認');
+      expect(title, home.onBackground);
+      expect(contrast(title, home.backgroundTop), greaterThanOrEqualTo(4.5));
+    });
+
+    testWidgets('MV を選んでいなければ、解析の画面は標準の配色(AC-2)', (tester) async {
+      final fakes = _Fakes(photos: [photo('a.png')]);
+      await _pump(tester, fakes);
+
+      await openReview(tester);
+
+      expect(
+        AppPalette.of(tester.element(find.text('写真の確認'))),
+        AppPalette.standard,
+      );
+    });
+
+    testWidgets('入力がそろっていない送信ボタンの文字は、標準でも MV の配色でも 4.5:1 以上(AC-5)', (
+      tester,
+    ) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ガーリー'], colors: ['ピンク']),
+      );
+      await _pump(tester, fakes);
+
+      void expectReadable() {
+        final button = tester.widget<FilledButton>(find.byKey(submitButtonKey));
+        final background = button.style!.backgroundColor!.resolve({})!;
+        final text = textColor(tester, 'コーディネートを提案してもらう');
+        expect(contrast(text, background), greaterThanOrEqualTo(4.5));
+      }
+
+      expectReadable();
+      await _selectMv(tester);
+      expect(homePalette(tester), isNot(AppPalette.standard));
+      expectReadable();
+    });
+
+    testWidgets('暗い配色でも、カードの外のボタン(考え中・提案)の文字が背景に対して 4.5:1 以上(AC-6)', (
+      tester,
+    ) async {
+      final suggestion = Completer<OutfitSuggestion>();
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ロック'], colors: ['紺']),
+        outfit: FakeOutfitRepository(suggestResponder: () => suggestion.future),
+      );
+      await _pump(tester, fakes);
+      await _selectMv(tester);
+      await _selectLive(tester);
+      final home = homePalette(tester);
+      expect(home.dark, isTrue);
+
+      await _press(tester);
+      final cancel = textColor(tester, 'キャンセルして入力に戻る');
+      expect(contrast(cancel, home.backgroundTop), greaterThanOrEqualTo(4.5));
+      expect(
+        contrast(cancel, home.backgroundBottom),
+        greaterThanOrEqualTo(4.5),
+      );
+
+      suggestion.complete(suggestionOf('ロックなコーデ'));
+      await _waitResult(tester);
+      final restart = textColor(tester, '条件を変えてもう一度');
+      expect(contrast(restart, home.backgroundTop), greaterThanOrEqualTo(4.5));
+      expect(
+        contrast(restart, home.backgroundBottom),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
+    testWidgets('明るい配色のヘッダの「ログイン」と説明文は背景に対して 4.5:1 以上(AC-7)', (tester) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ナチュラル'], colors: ['黄']),
+      );
+      await _pump(tester, fakes);
+      await _selectMv(tester);
+      final home = homePalette(tester);
+      expect(home.dark, isFalse);
+
+      final login = tester
+          .renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.byType(TextButton),
+              matching: find.text('ログイン'),
+            ),
+          )
+          .text
+          .style!
+          .color!;
+      final subtitle = textColor(tester, '行くライブと手持ちの服から、会場で浮かないコーディネートを提案します。');
+      for (final color in [login, subtitle]) {
+        expect(contrast(color, home.backgroundTop), greaterThanOrEqualTo(4.5));
+      }
+    });
+  });
+
   testWidgets('アプリを起動するとこの画面が出る', (tester) async {
     await tester.pumpWidget(const App());
 
-    expect(find.text('はじめてのライブ服'), findsOneWidget);
+    expect(find.text('THE FIRST KITAKE'), findsOneWidget);
     expect(find.byType(HomePage), findsOneWidget);
   });
 
@@ -240,10 +625,8 @@ void main() {
     expect(_phaseSelected(tester, '1 入力'), isTrue);
     expect(find.text('提案をキャンセルしました。入力内容はそのまま残っています。'), findsOneWidget);
     // 選んだ動画とライブは残っている
-    expect(
-      find.text('https://www.youtube.com/watch?v=abcDEF12345'),
-      findsWidgets,
-    );
+    expect(find.text('YouTube で開く'), findsOneWidget);
+    expect(find.byType(CultureSummaryCard), findsOneWidget);
     expect(find.text('公演A'), findsOneWidget);
     expect(find.text('変更'), findsOneWidget);
 

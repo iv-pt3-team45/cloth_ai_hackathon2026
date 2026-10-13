@@ -19,7 +19,7 @@ class OutfitResultView extends StatelessWidget {
   const OutfitResultView({
     super.key,
     required this.suggestion,
-    required this.imageUrl,
+    required this.photo,
     required this.onRetryImage,
     required this.onRestart,
     this.image,
@@ -41,7 +41,7 @@ class OutfitResultView extends StatelessWidget {
   final LiveSearchResult? liveResult;
   final CultureReport? culture;
 
-  final String Function(String image) imageUrl;
+  final PhotoLoader photo;
   final VoidCallback onRetryImage;
   final VoidCallback onRestart;
 
@@ -87,7 +87,7 @@ class OutfitResultView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox.square(
                     dimension: 52,
-                    child: ClothPhoto(url: imageUrl(item.cloth.image)),
+                    child: ClothPhoto(image: item.cloth.image, load: photo),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -160,6 +160,8 @@ class OutfitResultView extends StatelessWidget {
         ),
         Center(
           child: OutlinedButton(
+            // カードの外に置くので、背景用の文字色にする(spec 041)
+            style: onBackgroundButtonStyle(context),
             onPressed: onRestart,
             child: const Text('条件を変えてもう一度'),
           ),

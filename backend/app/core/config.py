@@ -76,6 +76,22 @@ class Settings(BaseSettings):
     # gcs のときのバケット名と、バケットの中の置き場所(接頭辞。末尾の / は付けない)
     wardrobe_gcs_bucket: str = ""
     wardrobe_gcs_prefix: str = "wardrobe"
+    # local のとき、ユーザー・ゲストごとの服とユーザーの一覧を置くフォルダ
+    # (backend/ からの相対。spec 038)。users/<ID>/wardrobe/・guests/<番号>/wardrobe/・
+    # auth/users.json を作る
+    wardrobe_local_root: str = "data"
+
+    # --- ログイン(spec 038) ---
+    # トークンの署名の鍵(秘匿情報)。本番は Secret Manager から渡す。
+    # local で空なら起動のたびにランダムな鍵を使う(再起動でログアウトされる)
+    auth_secret_key: str = ""
+    # トークンの有効期間(日)。ユーザーもゲストも同じ
+    auth_token_days: int = 7
+    # ゲストの服を読む期限(時間)。Cloud Storage のライフサイクルルール(1 日)と揃える
+    guest_wardrobe_hours: int = 24
+    # CLI のエージェントが読む服のユーザー ID(CLI の --user)。空なら CLOTH_INDEX_PATH など
+    # 今までどおりの置き場所を読む
+    agent_wardrobe_user: str = ""
 
     # --- YouTube Data API ---
     # 【例外】API キーを使う。YouTube Data API は ADC の既定スコープ(cloud-platform)では呼べないため
@@ -132,6 +148,11 @@ class Settings(BaseSettings):
     def outfit_mannequin_file(self) -> Path:
         """コーデ提案で服を着せるマネキン画像の絶対パス。"""
         return (BACKEND_ROOT / self.outfit_mannequin_path).resolve()
+
+    @property
+    def wardrobe_local_root_path(self) -> Path:
+        """ユーザー・ゲストごとの服とユーザーの一覧を置くフォルダ(絶対パス。spec 038)。"""
+        return (BACKEND_ROOT / self.wardrobe_local_root).resolve()
 
     @property
     def cloth_index_file(self) -> Path:

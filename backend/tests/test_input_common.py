@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.schemas.common import MAX_STRING_LENGTH, check_strings
 from app.services.wardrobe_registry import get_wardrobe_service
+from tests.auth_stub import as_owner
 from tests.test_wardrobe_api import ITEM, register
 from tests.wardrobe_stub import image_body, make_service
 
@@ -16,6 +17,7 @@ def _api(tmp_path: Path) -> TestClient:
     app = create_app()
     service = make_service(tmp_path)
     app.dependency_overrides[get_wardrobe_service] = lambda: service
+    as_owner(app)
     return TestClient(app)
 
 

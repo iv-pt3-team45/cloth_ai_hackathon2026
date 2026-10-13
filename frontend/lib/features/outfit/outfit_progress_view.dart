@@ -22,7 +22,7 @@ class OutfitProgressView extends StatefulWidget {
     required this.stage,
     required this.startedAt,
     required this.clothes,
-    required this.imageUrl,
+    required this.photo,
     required this.onCancel,
     this.imageFailed = false,
   });
@@ -32,7 +32,7 @@ class OutfitProgressView extends StatefulWidget {
 
   /// 並べて見せる服(考えている間は手持ちの服すべて、画像を作る間は提案の服)
   final List<RegisteredCloth> clothes;
-  final String Function(String image) imageUrl;
+  final PhotoLoader photo;
   final VoidCallback onCancel;
 
   /// 画像の生成だけが失敗した(終わったときの見出しと段階 2 の表示に使う)
@@ -133,7 +133,8 @@ class _OutfitProgressViewState extends State<OutfitProgressView> {
                     child: SizedBox.square(
                       dimension: 48,
                       child: ClothPhoto(
-                        url: widget.imageUrl(widget.clothes[i].image),
+                        image: widget.clothes[i].image,
+                        load: widget.photo,
                       ),
                     ),
                   ),
@@ -163,6 +164,8 @@ class _OutfitProgressViewState extends State<OutfitProgressView> {
         if (!done)
           Center(
             child: OutlinedButton(
+              // カードの外に置くので、背景用の文字色にする(spec 041)
+              style: onBackgroundButtonStyle(context),
               onPressed: widget.onCancel,
               child: const Text('キャンセルして入力に戻る'),
             ),
@@ -269,6 +272,7 @@ class _EqualizerState extends State<_Equalizer>
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return AnimatedBuilder(
       animation: _controller,
       builder: (_, _) => Row(
@@ -285,8 +289,8 @@ class _EqualizerState extends State<_Equalizer>
                       (0.5 + 0.5 * sin(2 * pi * _controller.value + i * 1.37))
                           .abs(),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.accent, AppColors.accent2],
+                gradient: LinearGradient(
+                  colors: [palette.accent, palette.accent2],
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                 ),

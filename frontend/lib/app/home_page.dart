@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../core/auth_session.dart';
+import '../core/reduce_motion.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
+import '../features/auth/login_card.dart';
+import '../features/auth/login_page.dart';
 import '../features/mv_lookup/culture_repository.dart';
+import '../features/mv_lookup/culture_vibe.dart';
 import '../features/mv_lookup/live_repository.dart';
 import '../features/mv_lookup/mv_lookup_panel.dart';
 import '../features/mv_lookup/mv_lookup_snapshot.dart';
 import '../features/mv_lookup/mv_repository.dart';
 import '../features/mv_lookup/venue_repository.dart';
+import '../features/mv_lookup/vibe_backdrop.dart';
 import '../features/outfit/outfit_controller.dart';
+import '../features/outfit/outfit_models.dart';
 import '../features/outfit/outfit_progress_view.dart';
 import '../features/outfit/outfit_repository.dart';
 import '../features/outfit/outfit_result_view.dart';
@@ -46,6 +53,7 @@ class HomePage extends StatefulWidget {
     this.wardrobeRepository,
     this.photoPicker,
     this.outfitRepository,
+    this.authSession,
   });
 
   // テストで差し替える
@@ -57,11 +65,18 @@ class HomePage extends StatefulWidget {
   final PhotoPicker? photoPicker;
   final OutfitRepository? outfitRepository;
 
+  /// ログインの状態(spec 038)。省略時はアプリで 1 つの状態
+  final AuthSession? authSession;
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
+  late final AuthSession _auth = (widget.authSession ?? AuthSession.shared)
+    ..addListener(_onAuthChanged);
+  late String _owner = _auth.ownerKey;
+
   late final WardrobeRepository _wardrobe =
       widget.wardrobeRepository ?? WardrobeRepository();
   late final OutfitController _outfit = OutfitController(
@@ -81,7 +96,14 @@ class _HomePageState extends State<HomePage> {
   int _run = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _auth.restore();
+  }
+
+  @override
   void dispose() {
+    _auth.removeListener(_onAuthChanged);
     _outfit
       ..removeListener(_onOutfitChanged)
       ..dispose();
@@ -92,6 +114,33 @@ class _HomePageState extends State<HomePage> {
   void _onOutfitChanged() {
     if (mounted) setState(() {});
   }
+
+  /// ログイン・ログアウトしたら、手持ちの服を読み直し、前の持ち主の服で作った提案を消す。
+  /// ① ② の入力と選択は残す(spec 038 AC-12)。
+  void _onAuthChanged() {
+    if (!mounted) return;
+    final owner = _auth.ownerKey;
+    if (owner == _owner) {
+      setState(() {});
+      return;
+    }
+    _owner = owner;
+    if (_phase != Phase.input) {
+      _run++;
+      _outfit.cancel();
+    }
+    setState(() {
+      _clothes = null;
+      _attempted = false;
+      _notice = null;
+      _phase = Phase.input;
+    });
+  }
+
+  /// ヘッダ・③ の「ログイン」: ログイン画面を重ねて開く(spec 040)。
+  /// [context] は配色(spec 039)の内側のものを渡し、ログイン画面に配色を引き継ぐ。
+  /// ログインした後の服の読み直しは [_onAuthChanged] が行う。
+  void _openLogin(BuildContext context) => openLoginPage(context, _auth);
 
   List<_Check> get _checklist {
     final clothes = _clothes ?? const [];
@@ -184,127 +233,215 @@ class _HomePageState extends State<HomePage> {
         _attempted && missing.isEmpty && _snapshot.cultureLoading;
     final failure = _phase == Phase.input ? _outfit.error : null;
     final suggestion = _outfit.suggestion;
+    // MV のカルチャーに合わせた演出(spec 039)。選択を外せば null になり、標準の配色に戻る
+    final vibe = CultureVibe.from(_snapshot.video, _snapshot.culture);
+    final reduceMotion = reduceMotionOf(context);
 
+    // 配色は画面全体に掛けるので、「考え中」「提案」の段階とポップアップにも引き継がれる
+    return AnimatedTheme(
+      data: buildTheme(palette: CultureVibe.paletteOf(vibe)),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 400),
+      child: Builder(
+        builder: (context) => _buildScaffold(
+          context,
+          vibe: vibe,
+          reduceMotion: reduceMotion,
+          checklist: checklist,
+          missing: missing,
+          waitingCulture: waitingCulture,
+          failure: failure,
+          suggestion: suggestion,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context, {
+    required CultureVibe? vibe,
+    required bool reduceMotion,
+    required List<_Check> checklist,
+    required List<String> missing,
+    required bool waitingCulture,
+    required String? failure,
+    required OutfitSuggestion? suggestion,
+  }) {
+    final palette = AppPalette.of(context);
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 880),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _Header(phase: _phase),
-                  const SizedBox(height: 16),
-                  // 入力の段階のカードは、進捗・結果の段階でも破棄せずに隠すだけにする
-                  // (入力した内容・選んだ候補・取得中の処理を残すため。spec 015 AC-9, AC-14)
-                  Visibility(
-                    visible: _phase == Phase.input,
-                    maintainState: true,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_notice != null)
-                          MessageBox(
-                            color: AppColors.ok,
-                            children: [Text(_notice!)],
-                          ),
-                        if (missing.isNotEmpty || waitingCulture)
-                          MessageBox(
-                            color: AppColors.accent,
-                            children: [
-                              const Text(
-                                '入力内容を確認してください',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Bullets([
-                                ...missing,
-                                if (waitingCulture)
-                                  'カルチャー情報を調べています。終わってからもう一度押してください。',
-                              ]),
-                            ],
-                          ),
-                        if (failure != null)
-                          MessageBox(
-                            color: AppColors.accent,
-                            children: [
-                              const Text(
-                                'コーデを提案できませんでした',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(failure),
-                              const SizedBox(height: 4),
-                              const Hint('もう一度「コーディネートを提案してもらう」を押してください。'),
-                            ],
-                          ),
-                        MvLookupPanel(
-                          repository: widget.mvRepository,
-                          cultureRepository: widget.cultureRepository,
-                          liveRepository: widget.liveRepository,
-                          venueRepository: widget.venueRepository,
-                          onChanged: (s) => setState(() => _snapshot = s),
-                        ),
-                        WardrobeSection(
-                          repository: _wardrobe,
-                          picker: widget.photoPicker,
-                          onChanged: (c) => setState(() => _clothes = c),
-                        ),
-                        // 初期ページの一番下に小さく置く(spec 042)
-                        const PrivacyPolicyLink(),
-                      ],
-                    ),
-                  ),
-                  if (_phase == Phase.running)
-                    OutfitProgressView(
-                      stage: _outfit.stage,
-                      startedAt: _outfit.startedAt ?? DateTime.now(),
-                      clothes: suggestion == null
-                          ? _clothes ?? const []
-                          : [for (final item in suggestion.items) item.cloth],
-                      imageUrl: _wardrobe.imageUrl,
-                      onCancel: _cancel,
-                      imageFailed: _outfit.imageError != null,
-                    ),
-                  if (_phase == Phase.result && suggestion != null)
-                    OutfitResultView(
-                      suggestion: suggestion,
-                      image: _outfit.image,
-                      imageError: _outfit.imageError,
-                      retryingImage: _outfit.retryingImage,
-                      live: _snapshot.selectedLive,
-                      liveResult: _snapshot.liveResult,
-                      culture: _snapshot.culture,
-                      imageUrl: _wardrobe.imageUrl,
-                      onRetryImage: _outfit.retryImage,
-                      onRestart: _restart,
-                    ),
-                ],
-              ),
+      backgroundColor: palette.backgroundBottom,
+      body: Stack(
+        children: [
+          // 背景のグラデーションと、カードの後ろで流れる動き
+          const Positioned.fill(child: PaletteBackground(child: SizedBox())),
+          Positioned.fill(
+            child: VibeBackdrop(
+              effect: vibe?.effect,
+              colors: [palette.accent, palette.accent2],
+              animate: !reduceMotion,
             ),
           ),
-        ),
+          SafeArea(
+            bottom: false,
+            child: _buildBody(
+              context,
+              checklist: checklist,
+              missing: missing,
+              waitingCulture: waitingCulture,
+              failure: failure,
+              suggestion: suggestion,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: _phase == Phase.input
           ? _SubmitBar(items: checklist, onSubmit: _submit)
           : null,
     );
   }
+
+  Widget _buildBody(
+    BuildContext context, {
+    required List<_Check> checklist,
+    required List<String> missing,
+    required bool waitingCulture,
+    required String? failure,
+    required OutfitSuggestion? suggestion,
+  }) {
+    return SingleChildScrollView(
+      controller: _scroll,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Header(
+                phase: _phase,
+                account: AccountStatus(
+                  session: _auth,
+                  onLoginTap: _phase == Phase.input
+                      ? () => _openLogin(context)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 入力の段階のカードは、進捗・結果の段階でも破棄せずに隠すだけにする
+              // (入力した内容・選んだ候補・取得中の処理を残すため。spec 015 AC-9, AC-14)
+              Visibility(
+                visible: _phase == Phase.input,
+                maintainState: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_notice != null)
+                      MessageBox(
+                        color: AppColors.ok,
+                        children: [Text(_notice!)],
+                      ),
+                    // ログインの期限切れなど(spec 038)
+                    if (_auth.notice != null)
+                      MessageBox(
+                        color: AppColors.accent,
+                        children: [Text(_auth.notice!)],
+                      ),
+                    if (missing.isNotEmpty || waitingCulture)
+                      MessageBox(
+                        color: AppColors.accent,
+                        children: [
+                          const Text(
+                            '入力内容を確認してください',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Bullets([
+                            ...missing,
+                            if (waitingCulture)
+                              'カルチャー情報を調べています。終わってからもう一度押してください。',
+                          ]),
+                        ],
+                      ),
+                    if (failure != null)
+                      MessageBox(
+                        color: AppColors.accent,
+                        children: [
+                          const Text(
+                            'コーデを提案できませんでした',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(failure),
+                          const SizedBox(height: 4),
+                          const Hint('もう一度「コーディネートを提案してもらう」を押してください。'),
+                        ],
+                      ),
+                    MvLookupPanel(
+                      repository: widget.mvRepository,
+                      cultureRepository: widget.cultureRepository,
+                      liveRepository: widget.liveRepository,
+                      venueRepository: widget.venueRepository,
+                      onChanged: (s) => setState(() => _snapshot = s),
+                    ),
+                    // 持ち主(ログイン・ゲスト)が変わったら作り直して一覧を読み直す(spec 038)
+                    WardrobeSection(
+                      key: ValueKey(_owner),
+                      repository: _wardrobe,
+                      picker: widget.photoPicker,
+                      onChanged: (c) => setState(() => _clothes = c),
+                      header: _auth.isUser
+                          ? null
+                          : LoginCard(onLoginTap: () => _openLogin(context)),
+                    ),
+                    // 初期ページの一番下に小さく置く(spec 042)
+                    const PrivacyPolicyLink(),
+                  ],
+                ),
+              ),
+              if (_phase == Phase.running)
+                OutfitProgressView(
+                  stage: _outfit.stage,
+                  startedAt: _outfit.startedAt ?? DateTime.now(),
+                  clothes: suggestion == null
+                      ? _clothes ?? const []
+                      : [for (final item in suggestion.items) item.cloth],
+                  photo: _wardrobe.imageBytes,
+                  onCancel: _cancel,
+                  imageFailed: _outfit.imageError != null,
+                ),
+              if (_phase == Phase.result && suggestion != null)
+                OutfitResultView(
+                  suggestion: suggestion,
+                  image: _outfit.image,
+                  imageError: _outfit.imageError,
+                  retryingImage: _outfit.retryingImage,
+                  live: _snapshot.selectedLive,
+                  liveResult: _snapshot.liveResult,
+                  culture: _snapshot.culture,
+                  photo: _wardrobe.imageBytes,
+                  onRetryImage: _outfit.retryImage,
+                  onRestart: _restart,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-/// ヘッダー(アイコン・アプリ名・説明・段階)。
+/// ヘッダー(アイコン・アプリ名・説明・段階・ログインの状態)。
 class _Header extends StatelessWidget {
-  const _Header({required this.phase});
+  const _Header({required this.phase, required this.account});
 
   final Phase phase;
+  final Widget account;
 
   @override
   Widget build(BuildContext context) {
     final current = _phases.indexWhere((p) => p.$1 == phase);
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -316,8 +453,8 @@ class _Header extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [AppColors.accent, AppColors.accent2],
+                gradient: LinearGradient(
+                  colors: [palette.accent, palette.accent2],
                 ),
               ),
               child: const Text(
@@ -330,35 +467,53 @@ class _Header extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // カードの外の文字なので、暗い背景(spec 039)では白にする
                   Text(
-                    'はじめてのライブ服',
+                    'THE FIRST KITAKE',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: palette.onBackground,
                     ),
                   ),
-                  const Hint('行くライブと手持ちの服から、会場で浮かないコーディネートを提案します。'),
+                  Text(
+                    '行くライブと手持ちの服から、会場で浮かないコーディネートを提案します。',
+                    style: TextStyle(
+                      color: palette.onBackgroundMuted,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+        Row(
           children: [
-            for (final (i, (_, label)) in _phases.indexed)
-              Semantics(
-                selected: i == current,
-                child: Pill(
-                  '${i + 1} $label',
-                  color: i == current
-                      ? AppColors.accent
-                      : (i < current ? AppColors.soft : Colors.white),
-                  textColor: i == current ? Colors.white : AppColors.muted,
-                  bold: i == current,
-                ),
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final (i, (_, label)) in _phases.indexed)
+                    Semantics(
+                      selected: i == current,
+                      child: Pill(
+                        '${i + 1} $label',
+                        color: i == current
+                            ? palette.accent
+                            : (i < current ? AppColors.soft : Colors.white),
+                        textColor: i == current
+                            ? Colors.white
+                            : AppColors.muted,
+                        bold: i == current,
+                      ),
+                    ),
+                ],
               ),
+            ),
+            // ログイン中のユーザー名とログアウト / ゲスト(spec 038)
+            Flexible(child: account),
           ],
         ),
       ],
@@ -367,11 +522,26 @@ class _Header extends StatelessWidget {
 }
 
 /// 画面下に固定する送信バー(送信前のチェックリスト付き)。
+/// 送信バーの「コーディネートを提案してもらう」(テストで使う)
+const submitButtonKey = ValueKey('submit-outfit');
+
 class _SubmitBar extends StatelessWidget {
   const _SubmitBar({required this.items, required this.onSubmit});
 
   final List<_Check> items;
   final VoidCallback onSubmit;
+
+  /// 入力がそろっていないときの見た目: 薄い差し色の地に、差し色の文字と枠(spec 041)。
+  /// 押せるのは同じ(足りないものを知らせる)。文字は地に対して 4.5:1 以上にする。
+  static ButtonStyle _notReadyStyle(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final text = AppPalette.ensureContrast(palette.accent, palette.selected);
+    return FilledButton.styleFrom(
+      backgroundColor: palette.selected,
+      foregroundColor: text,
+      side: BorderSide(color: text, width: 1.5),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -426,13 +596,8 @@ class _SubmitBar extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   FilledButton(
-                    style: ready
-                        ? null
-                        : FilledButton.styleFrom(
-                            backgroundColor: AppColors.accent.withValues(
-                              alpha: 0.55,
-                            ),
-                          ),
+                    key: submitButtonKey,
+                    style: ready ? null : _notReadyStyle(context),
                     onPressed: onSubmit,
                     child: const Text('コーディネートを提案してもらう'),
                   ),

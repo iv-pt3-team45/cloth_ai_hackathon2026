@@ -1,5 +1,7 @@
 """手持ちの服の写真を登録・一覧・削除するエンドポイント(spec 010)。
 
+解析以外は、ログイン・ゲストのトークンが必須(spec 038)。服はトークンの持ち主ごとに分かれる。
+
 解析(spec 005 の同期の呼び出し)とファイルの読み書きを行うため、ハンドラは同期関数にして
 FastAPI のスレッドプールで動かす。
 """
@@ -8,6 +10,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from app.api.deps import CurrentOwner
 from app.schemas.wardrobe import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -55,35 +58,35 @@ def analyze(payload: AnalyzeRequest, service: Service) -> AnalyzeResponse:
 
 
 @router.get("/items", response_model=WardrobeListResponse)
-def list_items(service: Service) -> WardrobeListResponse:
+def list_items(service: Service, owner: CurrentOwner) -> WardrobeListResponse:
     try:
-        items = service.list_items()
+        items = service.for_owner(owner).list_items()
     except WardrobeError as exc:
         raise _to_http(exc) from exc
     return WardrobeListResponse(items=items, count=len(items))
 
 
 @router.post("/items", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, service: Service) -> RegisterResponse:
+def register(payload: RegisterRequest, service: Service, owner: CurrentOwner) -> RegisterResponse:
     try:
-        return RegisterResponse(items=service.register(payload))
+        return RegisterResponse(items=service.for_owner(owner).register(payload))
     except WardrobeError as exc:
         raise _to_http(exc) from exc
 
 
 @router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_item(item_id: str, service: Service) -> Response:
+def delete_item(item_id: str, service: Service, owner: CurrentOwner) -> Response:
     try:
-        service.delete(item_id)
+        service.for_owner(owner).delete(item_id)
     except WardrobeError as exc:
         raise _to_http(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/images/{image}")
-def read_image(image: str, service: Service) -> Response:
+def read_image(image: str, service: Service, owner: CurrentOwner) -> Response:
     try:
-        data, mime_type = service.read_image(image)
+        data, mime_type = service.for_owner(owner).read_image(image)
     except WardrobeError as exc:
         raise _to_http(exc) from exc
     return Response(content=data, media_type=mime_type)

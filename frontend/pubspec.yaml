@@ -40,6 +40,8 @@ dependencies:
   image_picker: ^1.2.3
   # 出典のリンクをタップで開く。spec 015
   url_launcher: ^6.3.3
+  # ログインの状態とゲストの番号をブラウザに保存する。spec 038
+  shared_preferences: ^2.5.6
 
 dev_dependencies:
   flutter_test:

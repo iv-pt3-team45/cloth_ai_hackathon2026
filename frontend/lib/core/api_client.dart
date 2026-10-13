@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import 'app_config.dart';
+import 'auth_session.dart';
 
 /// API 呼び出しが失敗したときに投げる例外。
 class ApiException implements Exception {
@@ -35,40 +37,74 @@ class ApiException implements Exception {
 }
 
 /// バックエンドとの HTTP 通信を担う薄いクライアント。
+///
+/// [auth] を渡すと、ログイン・ゲストのトークンを `Authorization` に付けて送る
+/// (手持ちの服・コーデ提案。spec 038)。401 が返ったら [AuthSession.onUnauthorized] に任せ、
+/// ゲストのトークンを取り直したときは 1 回だけやり直す。
 class ApiClient {
-  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+  ApiClient({http.Client? client, AuthSession? auth})
+    : _client = client ?? http.Client(),
+      _auth = auth;
 
   final http.Client _client;
+  final AuthSession? _auth;
 
-  Future<Map<String, dynamic>> get(String path) async {
-    final response = await _client.get(AppConfig.endpoint(path));
-    return _decode(response);
-  }
+  Future<Map<String, dynamic>> get(String path) async => _decode(
+    await _send((headers) => _client.get(_url(path), headers: headers)),
+  );
 
   Future<Map<String, dynamic>> post(
     String path,
     Map<String, dynamic> body,
-  ) async {
-    final response = await _client.post(
-      AppConfig.endpoint(path),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+  ) async => _decode(
+    await _send(
+      (headers) => _client.post(
+        _url(path),
+        headers: {...headers, 'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ),
+    ),
+  );
+
+  Future<Map<String, dynamic>> delete(String path) async => _decode(
+    await _send((headers) => _client.delete(_url(path), headers: headers)),
+  );
+
+  /// 本文をバイト列のまま受け取る(写真など)。
+  Future<Uint8List> getBytes(String path) async {
+    final response = await _send(
+      (headers) => _client.get(_url(path), headers: headers),
     );
-    return _decode(response);
+    _check(response);
+    return response.bodyBytes;
   }
 
-  Future<Map<String, dynamic>> delete(String path) async {
-    final response = await _client.delete(AppConfig.endpoint(path));
-    return _decode(response);
+  Uri _url(String path) => AppConfig.endpoint(path);
+
+  Future<http.Response> _send(
+    Future<http.Response> Function(Map<String, String> headers) request,
+  ) async {
+    final auth = _auth;
+    if (auth == null) return request(const {});
+    for (var attempt = 0; ; attempt++) {
+      final token = await auth.token();
+      final response = await request({'Authorization': 'Bearer $token'});
+      if (response.statusCode != 401 || attempt > 0) return response;
+      if (!await auth.onUnauthorized(token)) return response;
+    }
   }
 
-  Map<String, dynamic> _decode(http.Response response) {
+  void _check(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
         utf8.decode(response.bodyBytes),
         statusCode: response.statusCode,
       );
     }
+  }
+
+  Map<String, dynamic> _decode(http.Response response) {
+    _check(response);
     // 204(削除など)は本文が空
     if (response.bodyBytes.isEmpty) return const {};
     return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
