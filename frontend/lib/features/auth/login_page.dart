@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
 import '../../core/auth_session.dart';
+import '../../core/themed_route.dart';
 import '../../core/widgets.dart';
 import 'auth_scaffold.dart';
 import 'register_page.dart';
@@ -9,16 +10,11 @@ import 'register_page.dart';
 /// ログイン画面を開く(spec 040)。ログインできたら true。
 ///
 /// 入力の画面は下に残したまま重ねるので、閉じても ① ② の入力は残る。
-/// 開いた画面は入力の画面の配色(spec 039)の外に出るため、今の [Theme] を包んで渡す。
+/// 入力の画面の配色(spec 039)を引き継いで開く([pushThemed]。spec 041)。
 Future<bool> openLoginPage(BuildContext context, AuthSession session) async {
-  final theme = Theme.of(context);
-  final ok = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(
-      builder: (_) => Theme(
-        data: theme,
-        child: LoginPage(session: session),
-      ),
-    ),
+  final ok = await pushThemed<bool>(
+    context,
+    (_) => LoginPage(session: session),
   );
   return ok ?? false;
 }
@@ -73,14 +69,8 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  void _openRegister() {
-    final theme = Theme.of(context);
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => Theme(data: theme, child: const RegisterPage()),
-      ),
-    );
-  }
+  void _openRegister() =>
+      pushThemed<void>(context, (_) => const RegisterPage());
 
   @override
   Widget build(BuildContext context) {

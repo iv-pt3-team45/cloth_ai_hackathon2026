@@ -50,11 +50,10 @@ class AccountStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // カードの外(ヘッダ)に出すので、暗い背景(spec 039)では白系の文字にする
+    // カードの外(ヘッダ)に出すので、背景用の文字色にする。
+    // 差し色の文字は色付きの背景で読みにくくなるため、明るい配色でも使わない(spec 041)
     final palette = AppPalette.of(context);
-    final button = palette.dark
-        ? TextButton.styleFrom(foregroundColor: palette.onBackground)
-        : null;
+    final button = TextButton.styleFrom(foregroundColor: palette.onBackground);
     final userId = session.userId;
     if (userId == null) {
       return Row(

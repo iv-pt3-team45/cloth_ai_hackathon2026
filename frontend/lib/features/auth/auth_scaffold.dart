@@ -27,14 +27,7 @@ class AuthScaffold extends StatelessWidget {
     final palette = AppPalette.of(context);
     return PopScope(
       canPop: canPop,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [palette.backgroundTop, palette.backgroundBottom],
-          ),
-        ),
+      child: PaletteBackground(
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(

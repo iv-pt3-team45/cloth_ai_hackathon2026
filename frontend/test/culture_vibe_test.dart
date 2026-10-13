@@ -153,16 +153,117 @@ void main() {
       }
     });
 
-    test('スタイルだけのときは演出の既定色', () {
+    test('スタイルだけのときは演出の既定色(読みやすい濃さに調整した色)', () {
+      final base = CultureVibe.effectDefaults[VibeEffect.petals]!;
       final palette = CultureVibe.paletteOf(
         const CultureVibe(effect: VibeEffect.petals),
       );
+      // 色相は既定色のまま、明るさだけ下げる
       expect(
-        palette.accent,
-        AppPalette.readableOnWhite(
-          CultureVibe.effectDefaults[VibeEffect.petals]!,
-        ),
+        HSLColor.fromColor(palette.accent).hue,
+        closeTo(HSLColor.fromColor(base).hue, 1),
       );
+      expect(
+        HSLColor.fromColor(palette.accent).lightness,
+        lessThanOrEqualTo(HSLColor.fromColor(base).lightness),
+      );
+    });
+
+    group('文字と背景のコントラスト(spec 041 AC-4)', () {
+      // 色の辞書の色(代表の名前)と、辞書に無い色(灰・黒・白に近い色)
+      const names = [
+        'ショッキングピンク', 'ピンク', 'ワインレッド', '赤', 'オレンジ', '黄', 'ゴールド', //
+        'ミント', 'カーキ', 'オリーブ', '緑', 'ターコイズ', '水色', '紺', '青', //
+        'ラベンダー', '紫', 'ブラウン', 'ベージュ', 'シルバー', 'グレー',
+      ];
+      final colors = [
+        for (final n in names) CultureVibe.colorOf(n)!,
+        const Color(0xFF000000),
+        const Color(0xFF808080),
+        const Color(0xFFFFFDF0),
+      ];
+      final effects = <VibeEffect?>[null, ...VibeEffect.values];
+
+      void expectAtLeast(Color fg, Color bg, String reason) => expect(
+        AppPalette.contrast(fg, bg),
+        greaterThanOrEqualTo(4.5),
+        reason: reason,
+      );
+
+      test('明るい配色: 差し色は白・選んだ項目の地・背景に、灰色の文字は背景に対して 4.5:1 以上', () {
+        for (final effect in effects.where((e) => !(e?.dark ?? false))) {
+          for (final a in colors) {
+            for (final b in <Color?>[null, ...colors]) {
+              final p = CultureVibe.paletteOf(
+                CultureVibe(accent: a, accent2: b, effect: effect),
+              );
+              final why = '$effect $a $b';
+              expect(p.dark, isFalse);
+              for (final bg in [
+                Colors.white,
+                p.selected,
+                p.backgroundTop,
+                p.backgroundBottom,
+              ]) {
+                expectAtLeast(p.accent2, bg, 'accent2 $why');
+              }
+              for (final bg in [Colors.white, p.selected, p.backgroundTop]) {
+                expectAtLeast(p.accent, bg, 'accent $why');
+              }
+              for (final bg in [p.backgroundTop, p.backgroundBottom]) {
+                expectAtLeast(p.onBackground, bg, 'onBackground $why');
+                expectAtLeast(p.onBackgroundMuted, bg, 'muted $why');
+              }
+            }
+          }
+        }
+      });
+
+      test('暗い配色: 背景の上の文字は背景に、差し色は白い文字に対して 4.5:1 以上', () {
+        for (final effect in effects.where((e) => e?.dark ?? false)) {
+          for (final a in colors) {
+            for (final b in <Color?>[null, ...colors]) {
+              final p = CultureVibe.paletteOf(
+                CultureVibe(accent: a, accent2: b, effect: effect),
+              );
+              final why = '$effect $a $b';
+              expect(p.dark, isTrue);
+              for (final bg in [p.backgroundTop, p.backgroundBottom]) {
+                expectAtLeast(p.onBackground, bg, 'onBackground $why');
+                expectAtLeast(p.onBackgroundMuted, bg, 'muted $why');
+              }
+              expectAtLeast(Colors.white, p.accent, 'accent $why');
+              expectAtLeast(Colors.white, p.accent2, 'accent2 $why');
+            }
+          }
+        }
+      });
+
+      test('ensureContrast: 明るい背景では暗く、暗い背景では明るくし、足りていれば変えない', () {
+        const pink = Color(0xFFFF9EC4);
+        final onWhite = AppPalette.ensureContrast(pink, Colors.white);
+        expectAtLeast(onWhite, Colors.white, 'white');
+        expect(onWhite.computeLuminance(), lessThan(pink.computeLuminance()));
+
+        const navy = Color(0xFF1B2A6B);
+        const night = Color(0xFF120E18);
+        final onDark = AppPalette.ensureContrast(navy, night);
+        expectAtLeast(onDark, night, 'dark');
+        expect(onDark.computeLuminance(), greaterThan(navy.computeLuminance()));
+
+        expect(
+          AppPalette.ensureContrast(AppColors.text, Colors.white),
+          AppColors.text,
+        );
+      });
+
+      test('contrast は WCAG の値(白と黒で 21、同じ色で 1)', () {
+        expect(
+          AppPalette.contrast(Colors.white, const Color(0xFF000000)),
+          closeTo(21, 0.01),
+        );
+        expect(AppPalette.contrast(AppColors.accent, AppColors.accent), 1);
+      });
     });
 
     test('lerp で色が間を取る', () {

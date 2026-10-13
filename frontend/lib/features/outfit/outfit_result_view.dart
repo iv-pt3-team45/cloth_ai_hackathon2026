@@ -160,6 +160,8 @@ class OutfitResultView extends StatelessWidget {
         ),
         Center(
           child: OutlinedButton(
+            // カードの外に置くので、背景用の文字色にする(spec 041)
+            style: onBackgroundButtonStyle(context),
             onPressed: onRestart,
             child: const Text('条件を変えてもう一度'),
           ),

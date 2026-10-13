@@ -16,7 +16,9 @@ import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/venue_models.dart';
 import 'package:tx_hackathon_gc/features/outfit/outfit_models.dart';
+import 'package:tx_hackathon_gc/features/wardrobe/photo_picker.dart';
 import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_models.dart';
+import 'package:tx_hackathon_gc/features/wardrobe/wardrobe_review_screen.dart';
 import 'package:tx_hackathon_gc/main.dart';
 
 import 'mv_lookup_fakes.dart';
@@ -29,6 +31,7 @@ class _Fakes {
     List<RegisteredCloth> clothes = const [ownedShirt, ownedJeans],
     Future<CultureReport> Function(MvVideo video)? culture,
     FakeOutfitRepository? outfit,
+    List<PickedPhoto> photos = const [],
   }) : mv = FakeMvRepository(
          // URL なら動画、MV 名なら候補 1 件(候補を選ぶと URL で問い合わせ直す)
          (query) async => query.startsWith('https://')
@@ -49,7 +52,8 @@ class _Fakes {
        live = FakeLiveRepository(),
        venue = FakeVenueRepository(),
        wardrobe = FakeWardrobeRepository(items: clothes),
-       outfit = outfit ?? FakeOutfitRepository();
+       outfit = outfit ?? FakeOutfitRepository(),
+       picker = FakePhotoPicker(photos);
 
   final FakeMvRepository mv;
   final FakeCultureRepository culture;
@@ -57,6 +61,7 @@ class _Fakes {
   final FakeVenueRepository venue;
   final FakeWardrobeRepository wardrobe;
   final FakeOutfitRepository outfit;
+  final FakePhotoPicker picker;
 }
 
 /// 画面を出す。
@@ -86,7 +91,7 @@ Future<void> _pump(
         liveRepository: fakes.live,
         venueRepository: fakes.venue,
         wardrobeRepository: fakes.wardrobe,
-        photoPicker: FakePhotoPicker([]),
+        photoPicker: fakes.picker,
         outfitRepository: fakes.outfit,
       ),
     ),
@@ -131,7 +136,7 @@ void main() {
     await _pump(tester, _Fakes());
 
     expect(find.byType(NavigationBar), findsNothing);
-    expect(find.text('はじめてのライブ服'), findsOneWidget);
+    expect(find.text('THE FIRST KITAKE'), findsOneWidget);
     expect(find.text('1 入力'), findsOneWidget);
     expect(find.text('2 AIが考え中'), findsOneWidget);
     expect(find.text('3 提案'), findsOneWidget);
@@ -221,7 +226,10 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(VibeBurst), findsNothing);
 
-      final expected = AppPalette.readableOnWhite(CultureVibe.colorOf('ピンク')!);
+      final expected = AppPalette.fromAccents(
+        CultureVibe.colorOf('ピンク')!,
+        null,
+      ).accent;
       expect(palette(tester).accent, expected);
       expect(palette(tester).dark, isFalse);
       expect(
@@ -256,7 +264,7 @@ void main() {
       // ヘッダーのアプリ名(カードの外)は白にして読めるようにする
       expect(
         tester
-            .renderObject<RenderParagraph>(find.text('はじめてのライブ服'))
+            .renderObject<RenderParagraph>(find.text('THE FIRST KITAKE'))
             .text
             .style!
             .color,
@@ -328,7 +336,7 @@ void main() {
 
       expect(
         palette(tester).accent,
-        AppPalette.readableOnWhite(CultureVibe.colorOf('ピンク')!),
+        AppPalette.fromAccents(CultureVibe.colorOf('ピンク')!, null).accent,
       );
       expect(backdrop(tester).effect, VibeEffect.sparkle);
       expect(backdrop(tester).running, isFalse);
@@ -360,10 +368,147 @@ void main() {
     });
   });
 
+  group('画面の調整(spec 041)', () {
+    CultureReport report({
+      List<String> styles = const [],
+      List<String> colors = const [],
+    }) => CultureReport(
+      artist: 'YOASOBI',
+      identified: true,
+      fashion: FashionInfo(styles: styles, colors: colors),
+    );
+    AppPalette homePalette(WidgetTester tester) =>
+        AppPalette.of(tester.element(find.text('MV を選ぶ')));
+    double contrast(Color a, Color b) => AppPalette.contrast(a, b);
+    Color textColor(WidgetTester tester, String text) => tester
+        .renderObject<RenderParagraph>(find.text(text).last)
+        .text
+        .style!
+        .color!;
+
+    Future<void> openReview(WidgetTester tester) async {
+      await tester.tap(find.text('写真を選ぶ'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WardrobeReviewScreen), findsOneWidget);
+    }
+
+    testWidgets('MV で配色が変わった状態で写真を入れると、解析の画面も同じ配色になる(AC-1, AC-3)', (
+      tester,
+    ) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ロック'], colors: ['紺']),
+        photos: [photo('a.png')],
+      );
+      await _pump(tester, fakes);
+      await _selectMv(tester);
+      final home = homePalette(tester);
+      expect(home.dark, isTrue);
+
+      await openReview(tester);
+
+      final review = AppPalette.of(tester.element(find.text('写真の確認')));
+      expect(review, home);
+      // カードの外の文字(タイトル)は背景用の色で、暗い背景に対して読める
+      final title = textColor(tester, '写真の確認');
+      expect(title, home.onBackground);
+      expect(contrast(title, home.backgroundTop), greaterThanOrEqualTo(4.5));
+    });
+
+    testWidgets('MV を選んでいなければ、解析の画面は標準の配色(AC-2)', (tester) async {
+      final fakes = _Fakes(photos: [photo('a.png')]);
+      await _pump(tester, fakes);
+
+      await openReview(tester);
+
+      expect(
+        AppPalette.of(tester.element(find.text('写真の確認'))),
+        AppPalette.standard,
+      );
+    });
+
+    testWidgets('入力がそろっていない送信ボタンの文字は、標準でも MV の配色でも 4.5:1 以上(AC-5)', (
+      tester,
+    ) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ガーリー'], colors: ['ピンク']),
+      );
+      await _pump(tester, fakes);
+
+      void expectReadable() {
+        final button = tester.widget<FilledButton>(find.byKey(submitButtonKey));
+        final background = button.style!.backgroundColor!.resolve({})!;
+        final text = textColor(tester, 'コーディネートを提案してもらう');
+        expect(contrast(text, background), greaterThanOrEqualTo(4.5));
+      }
+
+      expectReadable();
+      await _selectMv(tester);
+      expect(homePalette(tester), isNot(AppPalette.standard));
+      expectReadable();
+    });
+
+    testWidgets('暗い配色でも、カードの外のボタン(考え中・提案)の文字が背景に対して 4.5:1 以上(AC-6)', (
+      tester,
+    ) async {
+      final suggestion = Completer<OutfitSuggestion>();
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ロック'], colors: ['紺']),
+        outfit: FakeOutfitRepository(suggestResponder: () => suggestion.future),
+      );
+      await _pump(tester, fakes);
+      await _selectMv(tester);
+      await _selectLive(tester);
+      final home = homePalette(tester);
+      expect(home.dark, isTrue);
+
+      await _press(tester);
+      final cancel = textColor(tester, 'キャンセルして入力に戻る');
+      expect(contrast(cancel, home.backgroundTop), greaterThanOrEqualTo(4.5));
+      expect(
+        contrast(cancel, home.backgroundBottom),
+        greaterThanOrEqualTo(4.5),
+      );
+
+      suggestion.complete(suggestionOf('ロックなコーデ'));
+      await _waitResult(tester);
+      final restart = textColor(tester, '条件を変えてもう一度');
+      expect(contrast(restart, home.backgroundTop), greaterThanOrEqualTo(4.5));
+      expect(
+        contrast(restart, home.backgroundBottom),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
+    testWidgets('明るい配色のヘッダの「ログイン」と説明文は背景に対して 4.5:1 以上(AC-7)', (tester) async {
+      final fakes = _Fakes(
+        culture: (video) async => report(styles: ['ナチュラル'], colors: ['黄']),
+      );
+      await _pump(tester, fakes);
+      await _selectMv(tester);
+      final home = homePalette(tester);
+      expect(home.dark, isFalse);
+
+      final login = tester
+          .renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.byType(TextButton),
+              matching: find.text('ログイン'),
+            ),
+          )
+          .text
+          .style!
+          .color!;
+      final subtitle = textColor(tester, '行くライブと手持ちの服から、会場で浮かないコーディネートを提案します。');
+      for (final color in [login, subtitle]) {
+        expect(contrast(color, home.backgroundTop), greaterThanOrEqualTo(4.5));
+      }
+    });
+  });
+
   testWidgets('アプリを起動するとこの画面が出る', (tester) async {
     await tester.pumpWidget(const App());
 
-    expect(find.text('はじめてのライブ服'), findsOneWidget);
+    expect(find.text('THE FIRST KITAKE'), findsOneWidget);
     expect(find.byType(HomePage), findsOneWidget);
   });
 

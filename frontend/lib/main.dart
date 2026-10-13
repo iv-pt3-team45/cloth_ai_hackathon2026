@@ -14,7 +14,7 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'はじめてのライブ服',
+      title: 'THE FIRST KITAKE',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: const HomePage(),

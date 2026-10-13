@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
 import '../../core/theme.dart';
+import '../../core/themed_route.dart';
 import '../../core/widgets.dart';
 import 'photo_picker.dart';
 import 'wardrobe_models.dart';
@@ -93,11 +94,10 @@ class _WardrobeSectionState extends State<WardrobeSection> {
       );
     }
 
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) =>
-            WardrobeReviewScreen(repository: _repository, photos: photos),
-      ),
+    // MV に合わせた配色のまま解析の画面を開く(spec 041)
+    final saved = await pushThemed<bool>(
+      context,
+      (_) => WardrobeReviewScreen(repository: _repository, photos: photos),
     );
     if (saved == true && mounted) await _load();
   }
