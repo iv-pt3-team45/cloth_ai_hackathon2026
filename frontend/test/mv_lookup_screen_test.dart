@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tx_hackathon_gc/core/api_client.dart';
+import 'package:tx_hackathon_gc/core/link.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_lookup_panel.dart';
 import 'package:tx_hackathon_gc/features/mv_lookup/mv_models.dart';
 
@@ -71,14 +72,56 @@ void main() {
     expect(repo.queries, ['https://youtu.be/abcDEF12345']);
     expect(find.text('アイドル'), findsOneWidget);
     expect(find.text('YOASOBI'), findsOneWidget);
-    expect(
-      find.text('https://www.youtube.com/watch?v=abcDEF12345'),
-      findsOneWidget,
-    );
-    expect(find.text('Ayase / YOASOBI'), findsOneWidget);
-    expect(find.text('概要欄'), findsOneWidget);
     expect(find.textContaining('分解できなかった'), findsNothing);
     expect(find.text('候補一覧に戻る'), findsNothing);
+  });
+
+  testWidgets('動画の情報は要点だけを出し、「詳細」で残りを開閉する(038 AC-1, AC-2)', (tester) async {
+    await _pumpScreen(tester, FakeMvRepository(_videoResult));
+    await _submit(tester, 'https://youtu.be/abcDEF12345');
+
+    expect(find.text('アイドル'), findsOneWidget);
+    expect(find.text('YOASOBI'), findsOneWidget);
+    expect(find.text('YouTube で開く'), findsOneWidget);
+    // 動画タイトル・チャンネル・概要欄は初期は出さない
+    expect(find.text('YOASOBI「アイドル」 Official Music Video'), findsNothing);
+    expect(find.text('Ayase / YOASOBI'), findsNothing);
+    expect(find.text('概要欄のテキスト'), findsNothing);
+
+    await tester.tap(find.text('詳細'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('YOASOBI「アイドル」 Official Music Video'), findsOneWidget);
+    expect(find.text('Ayase / YOASOBI'), findsOneWidget);
+    expect(find.text('概要欄のテキスト'), findsOneWidget);
+
+    await tester.tap(find.text('詳細'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ayase / YOASOBI'), findsNothing);
+  });
+
+  testWidgets('「YouTube で開く」で動画の URL を開き、開けなければ知らせる(038 AC-3)', (tester) async {
+    final opened = <Uri>[];
+    var result = true;
+    final original = openUrl;
+    openUrl = (uri) async {
+      opened.add(uri);
+      return result;
+    };
+    addTearDown(() => openUrl = original);
+    await _pumpScreen(tester, FakeMvRepository(_videoResult));
+    await _submit(tester, 'https://youtu.be/abcDEF12345');
+
+    await tester.tap(find.text('YouTube で開く'));
+    await tester.pump();
+    expect(opened.single.toString(), _video.url);
+    expect(find.text('リンクを開けませんでした'), findsNothing);
+
+    result = false;
+    await tester.tap(find.text('YouTube で開く'));
+    await tester.pump();
+    expect(find.text('リンクを開けませんでした'), findsOneWidget);
   });
 
   testWidgets('公開日を表示する', (tester) async {
@@ -101,12 +144,14 @@ void main() {
     await _pumpScreen(tester, repo);
 
     await _submit(tester, 'https://youtu.be/abcDEF12345');
+    await tester.tap(find.text('詳細'));
+    await tester.pumpAndSettle();
 
     expect(find.text('2023/06/15'), findsOneWidget);
   });
 
   testWidgets(
-    'MV 名を入力すると候補が出て、選ぶとその候補の直下にリンクが表示される(007 AC-3, AC-4 / 009 AC-1)',
+    'MV 名を入力すると候補が出て、選ぶと選んだ候補だけを残して直下に情報を出す(007 AC-3, AC-4 / 038 AC-4)',
     (tester) async {
       final repo = FakeMvRepository(
         (query) async => query.startsWith('https://')
@@ -131,20 +176,19 @@ void main() {
         'アイドル',
         'https://www.youtube.com/watch?v=abcDEF12345',
       ]);
-      const link = 'https://www.youtube.com/watch?v=abcDEF12345';
-      expect(find.text(link), findsOneWidget);
-      // 画面は切り替わらず、候補一覧は残る。情報は選んだ候補と次の候補の間に展開される
-      expect(find.text('アイドル 歌ってみた'), findsOneWidget);
+      // 選ばなかった候補は隠れ、選んだ候補の直下に動画の情報が出る
+      expect(find.text('アイドル 歌ってみた'), findsNothing);
+      expect(find.text('選んだ動画'), findsOneWidget);
+      expect(find.text('変更'), findsOneWidget);
       final selectedTop = tester
-          .getTopLeft(find.text('YOASOBI「アイドル」 Official Music Video').first)
+          .getTopLeft(find.text('YOASOBI「アイドル」 Official Music Video'))
           .dy;
-      final linkTop = tester.getTopLeft(find.text(link)).dy;
-      final nextTop = tester.getTopLeft(find.text('アイドル 歌ってみた')).dy;
-      expect(selectedTop < linkTop && linkTop < nextTop, isTrue);
+      final openTop = tester.getTopLeft(find.text('YouTube で開く')).dy;
+      expect(selectedTop < openTop, isTrue);
     },
   );
 
-  testWidgets('展開中の候補をもう一度押すと閉じる(009 AC-3)', (tester) async {
+  testWidgets('「変更」で候補の一覧に戻り、動画の情報は消える(038 AC-5)', (tester) async {
     final repo = FakeMvRepository(
       (query) async => query.startsWith('https://')
           ? const MvLookupResult(inputType: 'url', video: _video)
@@ -155,20 +199,18 @@ void main() {
 
     await tester.tap(find.text('YOASOBI「アイドル」 Official Music Video'));
     await tester.pumpAndSettle();
-    // 展開していない候補だけが右向きの矢印になる(下向きは概要欄の開閉にも使われるため数えない)
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsNothing);
+    expect(find.text('カルチャー情報'), findsOneWidget);
 
-    // 展開後は動画タイトルが 2 か所(候補と動画情報)に出るため、候補の方を押す
-    await tester.tap(find.text('YOASOBI「アイドル」 Official Music Video').first);
+    await tester.tap(find.text('変更'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('https://www.youtube.com/watch?v=abcDEF12345'),
-      findsNothing,
-    );
+    expect(find.text('YouTube で開く'), findsNothing);
+    expect(find.text('カルチャー情報'), findsNothing);
+    expect(find.text('変更'), findsNothing);
     expect(find.byIcon(Icons.chevron_right), findsNWidgets(2));
     expect(find.text('アイドル 歌ってみた'), findsOneWidget);
-    // 閉じるだけなので問い合わせは増えない
+    // 戻すだけなので問い合わせは増えない
     expect(repo.queries, hasLength(2));
   });
 

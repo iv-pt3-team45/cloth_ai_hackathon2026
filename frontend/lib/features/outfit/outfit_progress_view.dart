@@ -269,6 +269,7 @@ class _EqualizerState extends State<_Equalizer>
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return AnimatedBuilder(
       animation: _controller,
       builder: (_, _) => Row(
@@ -285,8 +286,8 @@ class _EqualizerState extends State<_Equalizer>
                       (0.5 + 0.5 * sin(2 * pi * _controller.value + i * 1.37))
                           .abs(),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.accent, AppColors.accent2],
+                gradient: LinearGradient(
+                  colors: [palette.accent, palette.accent2],
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                 ),

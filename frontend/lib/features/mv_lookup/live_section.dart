@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import 'culture_section.dart';
 import 'grounding_footer.dart';
 import 'live_models.dart';
 import 'utils.dart';
@@ -30,10 +31,14 @@ class LiveSection extends StatefulWidget {
     this.result,
     this.error,
     this.selectedIndex,
+    this.cultureLoading = false,
   });
 
   /// ① ② のどこかで取得中。この間は入力を受け付けない
   final bool busy;
+
+  /// カルチャー情報を取得中(入力を止めている理由を出す。spec 038)
+  final bool cultureLoading;
 
   /// ライブ情報を取得中
   final bool loading;
@@ -114,6 +119,7 @@ class _LiveSectionState extends State<LiveSection> {
     final knownArtist = widget.knownArtist;
     return SectionCard(
       step: 2,
+      done: widget.selectedIndex != null,
       title: '行くライブを検索',
       children: [
         const Hint('ライブ名・ツアー名・会場などのキーワードで公演を探します。日付で絞り込みたいときは「詳細検索」を開いてください。'),
@@ -153,6 +159,8 @@ class _LiveSectionState extends State<LiveSection> {
             ),
           ],
         ),
+        // 入力を止めている理由(spec 038 AC-19)
+        if (widget.cultureLoading) const CultureLockHint(),
         _DetailToggle(
           open: _showDetails,
           count: _date == null ? 0 : 1,
@@ -367,14 +375,15 @@ class _LiveCandidateTile extends StatelessWidget {
         ? ''
         : '(${candidate.location})';
     const detail = TextStyle(fontSize: 14);
+    final palette = AppPalette.of(context);
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
-      color: selected ? AppColors.selected : AppColors.soft,
+      color: selected ? palette.selected : AppColors.soft,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: selected ? AppColors.accent : Colors.transparent,
+          color: selected ? palette.accent : Colors.transparent,
           width: 1.5,
         ),
       ),
@@ -387,7 +396,7 @@ class _LiveCandidateTile extends StatelessWidget {
             children: [
               Icon(
                 selected ? Icons.check_circle : Icons.music_note,
-                color: selected ? AppColors.accent : AppColors.muted,
+                color: selected ? palette.accent : AppColors.muted,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -427,7 +436,7 @@ class _LiveCandidateTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               selected
-                  ? const Text('変更', style: TextStyle(color: AppColors.accent))
+                  ? Text('変更', style: TextStyle(color: palette.accent))
                   : const Icon(Icons.chevron_right, color: AppColors.muted),
             ],
           ),

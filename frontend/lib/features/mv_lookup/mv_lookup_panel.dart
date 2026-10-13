@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
+import '../../core/link.dart';
+import '../../core/reduce_motion.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import 'culture_models.dart';
 import 'culture_repository.dart';
 import 'culture_section.dart';
+import 'culture_vibe.dart';
 import 'live_models.dart';
 import 'live_repository.dart';
 import 'live_section.dart';
@@ -15,6 +18,7 @@ import 'mv_repository.dart';
 import 'utils.dart';
 import 'venue_models.dart';
 import 'venue_repository.dart';
+import 'vibe_backdrop.dart';
 
 /// MV の入力欄(テストで入力欄を区別するため)。
 const mvQueryFieldKey = ValueKey('mv-query');
@@ -29,7 +33,8 @@ typedef _LiveQuery = ({String query, DateTime? date, String? artist});
 ///
 /// - YouTube の URL または MV 名から、MV のメタ情報(アーティスト名・曲名・リンクなど)を調べる(spec 007)。
 /// - 動画情報が表示されたら、そのアーティストのカルチャー情報も自動で調べる(spec 008)。
-/// - 候補を選ぶと、その候補の直下に情報を展開する(spec 009)。
+/// - 候補を選ぶと、選んだ 1 件だけを残して一覧を畳み、その直下に情報を展開する(spec 009 / 038)。
+///   「変更」で候補の一覧に戻る。
 /// - ② で、ライブ情報と当日の天気を調べる(spec 009)。
 /// - 取得中は、2 枚のカードのどちらの入力も受け付けない(ロックを共有するため 1 つの State で 2 枚を返す)。
 /// - 状態が変わるたびに、要約を [onChanged] で外へ出す(spec 011)。
@@ -74,6 +79,9 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
 
   /// 展開中の候補の動画 ID(候補から選んだとき)
   String? _expandedVideoId;
+
+  /// 切り替わりの演出の始点(選んだ候補、URL 入力のときは動画の情報。spec 038)
+  final _burstOriginKey = GlobalKey();
   MvVideo? _video;
 
   bool _cultureLoading = false;
@@ -198,7 +206,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
     if (video != null && mounted) await _researchCulture(video);
   }
 
-  /// 候補のタップ。展開中の候補なら閉じ、別の候補なら展開し直す。
+  /// 候補のタップ。選んだ候補(「変更」)なら選択を外して一覧に戻し、別の候補なら展開する。
   void _onCandidateTap(MvCandidate candidate) {
     if (_busy) return;
     if (_expandedVideoId == candidate.videoId) {
@@ -225,6 +233,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
       final report = await _cultureRepository.research(video);
       if (!mounted) return;
       setState(() => _culture = report);
+      _playBurst(video, report);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _cultureError = e.detail);
@@ -234,6 +243,21 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
     } finally {
       if (mounted) setState(() => _cultureLoading = false);
     }
+  }
+
+  /// カルチャー情報が届いたときに 1 回だけ、選んだ候補のあたりから MV の色を広げる(spec 038 D)。
+  ///
+  /// 演出を判定できないとき・動きを減らす設定のときは出さない。
+  void _playBurst(MvVideo video, CultureReport report) {
+    final vibe = CultureVibe.from(video, report);
+    if (vibe == null || vibe.isNone) return;
+    if (reduceMotionOf(context)) return;
+    final color = CultureVibe.paletteOf(vibe).accent;
+    // 選んだ候補の位置は、次の描画の後に取る
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showVibeBurst(context, origin: _burstOriginKey, color: color);
+    });
   }
 
   /// ライブ情報を Gemini に調べさせる。表示中のアーティストが分かっていれば条件に添える。
@@ -333,6 +357,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
       children: [
         SectionCard(
           step: 1,
+          done: _video != null,
           title: 'MV を選ぶ',
           children: [
             const Hint(
@@ -370,6 +395,8 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
                 ),
               ],
             ),
+            // 入力を止めている理由(spec 038 AC-19)
+            if (_cultureLoading) const CultureLockHint(),
             if (_error != null) ...[
               const SizedBox(height: 12),
               ErrorText(_error!),
@@ -379,6 +406,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
         ),
         LiveSection(
           busy: _busy,
+          cultureLoading: _cultureLoading,
           loading: _liveLoading,
           knownArtist: _knownArtist,
           result: _live,
@@ -412,6 +440,30 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
       ];
     }
 
+    // 候補を選んだら、選んだ 1 件だけを残して一覧を畳む(spec 038 AC-4)
+    final selected = _candidates
+        .where((c) => c.videoId == _expandedVideoId)
+        .firstOrNull;
+    if (selected != null) {
+      return [
+        const SizedBox(height: 16),
+        const Text('選んだ動画', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _CandidateTile(
+          key: _burstOriginKey,
+          candidate: selected,
+          expanded: true,
+          onTap: _busy ? null : () => _onCandidateTap(selected),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+          child: video == null
+              ? const LinearProgressIndicator()
+              : _videoPanel(video),
+        ),
+      ];
+    }
+
     return [
       const SizedBox(height: 16),
       Text(
@@ -419,20 +471,12 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
         style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 8),
-      for (final candidate in _candidates) ...[
+      for (final candidate in _candidates)
         _CandidateTile(
           candidate: candidate,
-          expanded: candidate.videoId == _expandedVideoId,
+          expanded: false,
           onTap: _busy ? null : () => _onCandidateTap(candidate),
         ),
-        if (candidate.videoId == _expandedVideoId)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
-            child: video == null
-                ? const LinearProgressIndicator()
-                : _videoPanel(video),
-          ),
-      ],
     ];
   }
 
@@ -441,7 +485,12 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _VideoDetail(video: video),
+        KeyedSubtree(
+          // URL 入力のときは、動画の情報を切り替わりの演出の始点にする
+          key: _candidates.isEmpty ? _burstOriginKey : null,
+          // 動画が変わったら「詳細」を閉じた状態から始める
+          child: _VideoSummary(key: ValueKey(video.videoId), video: video),
+        ),
         const SizedBox(height: 12),
         CultureSection(
           loading: _cultureLoading,
@@ -454,54 +503,105 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
   }
 }
 
-class _VideoDetail extends StatelessWidget {
-  const _VideoDetail({required this.video});
+/// 選んだ動画の情報(spec 038 A)。
+///
+/// 小さいサムネイル・曲名・アーティスト名・「YouTube で開く」の 1 まとまりにし、
+/// 動画タイトル・チャンネル・公開日・概要欄は「詳細」を開いたときだけ出す。
+class _VideoSummary extends StatefulWidget {
+  const _VideoSummary({super.key, required this.video});
 
   final MvVideo video;
 
   @override
+  State<_VideoSummary> createState() => _VideoSummaryState();
+}
+
+class _VideoSummaryState extends State<_VideoSummary> {
+  bool _showDetails = false;
+
+  @override
   Widget build(BuildContext context) {
+    final video = widget.video;
     final theme = Theme.of(context);
     final publishedAt = video.publishedAt;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (video.thumbnailUrl.isNotEmpty) ...[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: _Thumbnail(url: video.thumbnailUrl, maxWidth: 480),
-          ),
-          const SizedBox(height: 12),
-        ],
-        Text(
-          video.songTitle,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 120,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: _Thumbnail(url: video.thumbnailUrl, maxWidth: 120),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    video.songTitle,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    video.artist,
+                    style: const TextStyle(color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => openExternalUrl(context, video.url),
+                        icon: const Icon(Icons.open_in_new, size: 18),
+                        label: const Text('YouTube で開く'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () =>
+                            setState(() => _showDetails = !_showDetails),
+                        icon: AnimatedRotation(
+                          turns: _showDetails ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(Icons.expand_more),
+                        ),
+                        label: const Text('詳細'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        Text(video.artist, style: const TextStyle(color: AppColors.muted)),
         if (!video.titleParsed)
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: ErrorText('タイトルから分解できなかったため、チャンネル名と動画タイトルをそのまま表示しています'),
           ),
-        const Divider(height: 24, color: AppColors.border),
-        _Field(label: 'リンク', value: video.url),
-        _Field(label: '動画タイトル', value: video.title),
-        _Field(label: 'チャンネル', value: video.channelTitle),
-        if (publishedAt != null)
-          _Field(label: '公開日', value: formatDate(publishedAt)),
-        if (video.description.isNotEmpty)
-          Theme(
-            // 開閉の境界線を出さない
-            data: theme.copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              title: const Text('概要欄'),
-              tilePadding: EdgeInsets.zero,
-              expandedAlignment: Alignment.centerLeft,
-              children: [SelectableText(video.description)],
-            ),
-          ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: _showDetails
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Divider(height: 24, color: AppColors.border),
+                    _Field(label: '動画タイトル', value: video.title),
+                    _Field(label: 'チャンネル', value: video.channelTitle),
+                    if (publishedAt != null)
+                      _Field(label: '公開日', value: formatDate(publishedAt)),
+                    if (video.description.isNotEmpty)
+                      _Field(label: '概要欄', value: video.description),
+                  ],
+                )
+              : const SizedBox(width: double.infinity),
+        ),
       ],
     );
   }
@@ -535,9 +635,10 @@ class _Field extends StatelessWidget {
   }
 }
 
-/// MV の候補(tadasii の候補タイル)。展開中は薄い赤地と赤い枠で示す。
+/// MV の候補(tadasii の候補タイル)。選んだ候補は薄い差し色の地・枠と「変更」で示す。
 class _CandidateTile extends StatelessWidget {
   const _CandidateTile({
+    super.key,
     required this.candidate,
     required this.expanded,
     required this.onTap,
@@ -551,14 +652,15 @@ class _CandidateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
-      color: expanded ? AppColors.selected : AppColors.soft,
+      color: expanded ? palette.selected : AppColors.soft,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: expanded ? AppColors.accent : Colors.transparent,
+          color: expanded ? palette.accent : Colors.transparent,
           width: 1.5,
         ),
       ),
@@ -601,7 +703,7 @@ class _CandidateTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               expanded
-                  ? const Text('閉じる', style: TextStyle(color: AppColors.accent))
+                  ? Text('変更', style: TextStyle(color: palette.accent))
                   : const Icon(Icons.chevron_right, color: AppColors.muted),
             ],
           ),

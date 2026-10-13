@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../core/reduce_motion.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../features/mv_lookup/culture_repository.dart';
+import '../features/mv_lookup/culture_vibe.dart';
 import '../features/mv_lookup/live_repository.dart';
 import '../features/mv_lookup/mv_lookup_panel.dart';
 import '../features/mv_lookup/mv_lookup_snapshot.dart';
 import '../features/mv_lookup/mv_repository.dart';
 import '../features/mv_lookup/venue_repository.dart';
+import '../features/mv_lookup/vibe_backdrop.dart';
 import '../features/outfit/outfit_controller.dart';
+import '../features/outfit/outfit_models.dart';
 import '../features/outfit/outfit_progress_view.dart';
 import '../features/outfit/outfit_repository.dart';
 import '../features/outfit/outfit_result_view.dart';
@@ -183,112 +187,187 @@ class _HomePageState extends State<HomePage> {
         _attempted && missing.isEmpty && _snapshot.cultureLoading;
     final failure = _phase == Phase.input ? _outfit.error : null;
     final suggestion = _outfit.suggestion;
+    // MV のカルチャーに合わせた演出(spec 038)。選択を外せば null になり、標準の配色に戻る
+    final vibe = CultureVibe.from(_snapshot.video, _snapshot.culture);
+    final reduceMotion = reduceMotionOf(context);
 
+    // 配色は画面全体に掛けるので、「考え中」「提案」の段階とポップアップにも引き継がれる
+    return AnimatedTheme(
+      data: buildTheme(palette: CultureVibe.paletteOf(vibe)),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 400),
+      child: Builder(
+        builder: (context) => _buildScaffold(
+          context,
+          vibe: vibe,
+          reduceMotion: reduceMotion,
+          checklist: checklist,
+          missing: missing,
+          waitingCulture: waitingCulture,
+          failure: failure,
+          suggestion: suggestion,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context, {
+    required CultureVibe? vibe,
+    required bool reduceMotion,
+    required List<_Check> checklist,
+    required List<String> missing,
+    required bool waitingCulture,
+    required String? failure,
+    required OutfitSuggestion? suggestion,
+  }) {
+    final palette = AppPalette.of(context);
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 880),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _Header(phase: _phase),
-                  const SizedBox(height: 16),
-                  // 入力の段階のカードは、進捗・結果の段階でも破棄せずに隠すだけにする
-                  // (入力した内容・選んだ候補・取得中の処理を残すため。spec 015 AC-9, AC-14)
-                  Visibility(
-                    visible: _phase == Phase.input,
-                    maintainState: true,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_notice != null)
-                          MessageBox(
-                            color: AppColors.ok,
-                            children: [Text(_notice!)],
-                          ),
-                        if (missing.isNotEmpty || waitingCulture)
-                          MessageBox(
-                            color: AppColors.accent,
-                            children: [
-                              const Text(
-                                '入力内容を確認してください',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Bullets([
-                                ...missing,
-                                if (waitingCulture)
-                                  'カルチャー情報を調べています。終わってからもう一度押してください。',
-                              ]),
-                            ],
-                          ),
-                        if (failure != null)
-                          MessageBox(
-                            color: AppColors.accent,
-                            children: [
-                              const Text(
-                                'コーデを提案できませんでした',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(failure),
-                              const SizedBox(height: 4),
-                              const Hint('もう一度「コーディネートを提案してもらう」を押してください。'),
-                            ],
-                          ),
-                        MvLookupPanel(
-                          repository: widget.mvRepository,
-                          cultureRepository: widget.cultureRepository,
-                          liveRepository: widget.liveRepository,
-                          venueRepository: widget.venueRepository,
-                          onChanged: (s) => setState(() => _snapshot = s),
-                        ),
-                        WardrobeSection(
-                          repository: _wardrobe,
-                          picker: widget.photoPicker,
-                          onChanged: (c) => setState(() => _clothes = c),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_phase == Phase.running)
-                    OutfitProgressView(
-                      stage: _outfit.stage,
-                      startedAt: _outfit.startedAt ?? DateTime.now(),
-                      clothes: suggestion == null
-                          ? _clothes ?? const []
-                          : [for (final item in suggestion.items) item.cloth],
-                      imageUrl: _wardrobe.imageUrl,
-                      onCancel: _cancel,
-                      imageFailed: _outfit.imageError != null,
-                    ),
-                  if (_phase == Phase.result && suggestion != null)
-                    OutfitResultView(
-                      suggestion: suggestion,
-                      image: _outfit.image,
-                      imageError: _outfit.imageError,
-                      retryingImage: _outfit.retryingImage,
-                      live: _snapshot.selectedLive,
-                      liveResult: _snapshot.liveResult,
-                      culture: _snapshot.culture,
-                      imageUrl: _wardrobe.imageUrl,
-                      onRetryImage: _outfit.retryImage,
-                      onRestart: _restart,
-                    ),
-                ],
+      backgroundColor: palette.backgroundBottom,
+      body: Stack(
+        children: [
+          // 背景のグラデーションと、カードの後ろで流れる動き
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [palette.backgroundTop, palette.backgroundBottom],
+                ),
               ),
             ),
           ),
-        ),
+          Positioned.fill(
+            child: VibeBackdrop(
+              effect: vibe?.effect,
+              colors: [palette.accent, palette.accent2],
+              animate: !reduceMotion,
+            ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: _buildBody(
+              checklist: checklist,
+              missing: missing,
+              waitingCulture: waitingCulture,
+              failure: failure,
+              suggestion: suggestion,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: _phase == Phase.input
           ? _SubmitBar(items: checklist, onSubmit: _submit)
           : null,
+    );
+  }
+
+  Widget _buildBody({
+    required List<_Check> checklist,
+    required List<String> missing,
+    required bool waitingCulture,
+    required String? failure,
+    required OutfitSuggestion? suggestion,
+  }) {
+    return SingleChildScrollView(
+      controller: _scroll,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Header(phase: _phase),
+              const SizedBox(height: 16),
+              // 入力の段階のカードは、進捗・結果の段階でも破棄せずに隠すだけにする
+              // (入力した内容・選んだ候補・取得中の処理を残すため。spec 015 AC-9, AC-14)
+              Visibility(
+                visible: _phase == Phase.input,
+                maintainState: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_notice != null)
+                      MessageBox(
+                        color: AppColors.ok,
+                        children: [Text(_notice!)],
+                      ),
+                    if (missing.isNotEmpty || waitingCulture)
+                      MessageBox(
+                        color: AppColors.accent,
+                        children: [
+                          const Text(
+                            '入力内容を確認してください',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Bullets([
+                            ...missing,
+                            if (waitingCulture)
+                              'カルチャー情報を調べています。終わってからもう一度押してください。',
+                          ]),
+                        ],
+                      ),
+                    if (failure != null)
+                      MessageBox(
+                        color: AppColors.accent,
+                        children: [
+                          const Text(
+                            'コーデを提案できませんでした',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(failure),
+                          const SizedBox(height: 4),
+                          const Hint('もう一度「コーディネートを提案してもらう」を押してください。'),
+                        ],
+                      ),
+                    MvLookupPanel(
+                      repository: widget.mvRepository,
+                      cultureRepository: widget.cultureRepository,
+                      liveRepository: widget.liveRepository,
+                      venueRepository: widget.venueRepository,
+                      onChanged: (s) => setState(() => _snapshot = s),
+                    ),
+                    WardrobeSection(
+                      repository: _wardrobe,
+                      picker: widget.photoPicker,
+                      onChanged: (c) => setState(() => _clothes = c),
+                    ),
+                  ],
+                ),
+              ),
+              if (_phase == Phase.running)
+                OutfitProgressView(
+                  stage: _outfit.stage,
+                  startedAt: _outfit.startedAt ?? DateTime.now(),
+                  clothes: suggestion == null
+                      ? _clothes ?? const []
+                      : [for (final item in suggestion.items) item.cloth],
+                  imageUrl: _wardrobe.imageUrl,
+                  onCancel: _cancel,
+                  imageFailed: _outfit.imageError != null,
+                ),
+              if (_phase == Phase.result && suggestion != null)
+                OutfitResultView(
+                  suggestion: suggestion,
+                  image: _outfit.image,
+                  imageError: _outfit.imageError,
+                  retryingImage: _outfit.retryingImage,
+                  live: _snapshot.selectedLive,
+                  liveResult: _snapshot.liveResult,
+                  culture: _snapshot.culture,
+                  imageUrl: _wardrobe.imageUrl,
+                  onRetryImage: _outfit.retryImage,
+                  onRestart: _restart,
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -302,6 +381,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = _phases.indexWhere((p) => p.$1 == phase);
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -313,8 +393,8 @@ class _Header extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [AppColors.accent, AppColors.accent2],
+                gradient: LinearGradient(
+                  colors: [palette.accent, palette.accent2],
                 ),
               ),
               child: const Text(
@@ -327,13 +407,21 @@ class _Header extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // カードの外の文字なので、暗い背景(spec 038)では白にする
                   Text(
                     'はじめてのライブ服',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: palette.onBackground,
                     ),
                   ),
-                  const Hint('行くライブと手持ちの服から、会場で浮かないコーディネートを提案します。'),
+                  Text(
+                    '行くライブと手持ちの服から、会場で浮かないコーディネートを提案します。',
+                    style: TextStyle(
+                      color: palette.onBackgroundMuted,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -350,7 +438,7 @@ class _Header extends StatelessWidget {
                 child: Pill(
                   '${i + 1} $label',
                   color: i == current
-                      ? AppColors.accent
+                      ? palette.accent
                       : (i < current ? AppColors.soft : Colors.white),
                   textColor: i == current ? Colors.white : AppColors.muted,
                   bold: i == current,
@@ -426,9 +514,9 @@ class _SubmitBar extends StatelessWidget {
                     style: ready
                         ? null
                         : FilledButton.styleFrom(
-                            backgroundColor: AppColors.accent.withValues(
-                              alpha: 0.55,
-                            ),
+                            backgroundColor: AppPalette.of(
+                              context,
+                            ).accent.withValues(alpha: 0.55),
                           ),
                     onPressed: onSubmit,
                     child: const Text('コーディネートを提案してもらう'),
