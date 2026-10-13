@@ -59,15 +59,15 @@ void main() {
   });
 
   testWidgets('登録済みの服を写真の格子で並べ、タップで属性を見られる(spec 010 AC-8)', (tester) async {
-    final changes = await _pump(
-      tester,
-      FakeWardrobeRepository(items: [_registered]),
-    );
+    final repository = FakeWardrobeRepository(items: [_registered]);
+    final changes = await _pump(tester, repository);
 
     expect(find.text('1 点'), findsOneWidget);
     expect(find.byKey(const ValueKey('cloth-id1')), findsOneWidget);
-    // 写真を読み込めない場合もプレースホルダを出す
-    expect(find.byIcon(Icons.checkroom), findsOneWidget);
+    // 写真は URL ではなく、リポジトリから(トークン付きで)取得して表示する(spec 038 AC-13)
+    expect(repository.photoRequests, [_registered.image]);
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byIcon(Icons.checkroom), findsNothing);
     expect(changes.last?.single.id, 'id1');
     // 属性は一覧には出さず、タップしたシートで見る
     expect(find.text('色: 白・紺'), findsNothing);

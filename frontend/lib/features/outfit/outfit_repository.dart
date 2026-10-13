@@ -1,4 +1,5 @@
 import '../../core/api_client.dart';
+import '../../core/auth_session.dart';
 import '../mv_lookup/culture_models.dart';
 import '../mv_lookup/live_models.dart';
 import '../mv_lookup/mv_models.dart';
@@ -6,8 +7,11 @@ import '../mv_lookup/venue_models.dart';
 import 'outfit_models.dart';
 
 /// コーデ提案(spec 011)のデータアクセス層。
+///
+/// ログイン・ゲストのトークンを付けて呼ぶ(spec 038)。提案にはトークンの持ち主の服だけが使われる。
 class OutfitRepository {
-  OutfitRepository({ApiClient? client}) : _client = client ?? ApiClient();
+  OutfitRepository({ApiClient? client})
+    : _client = client ?? ApiClient(auth: AuthSession.shared);
 
   final ApiClient _client;
 

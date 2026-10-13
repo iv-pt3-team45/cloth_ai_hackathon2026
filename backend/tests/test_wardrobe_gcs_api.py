@@ -10,6 +10,7 @@ from app.main import create_app
 from app.services.outfit import OutfitService, get_outfit_service
 from app.services.wardrobe_gcs import GcsWardrobeStore
 from app.services.wardrobe_registry import WardrobeService, get_wardrobe_service
+from tests.auth_stub import as_owner
 from tests.gcs_stub import FakeBucket
 from tests.outfit_stub import make_culture, make_live, make_video, unknown_venue
 from tests.wardrobe_stub import fake_client, image_body, make_settings
@@ -35,6 +36,7 @@ def wardrobe_api(tmp_path: Path, bucket: FakeBucket) -> TestClient:
     )
     app = create_app()
     app.dependency_overrides[get_wardrobe_service] = lambda: service
+    as_owner(app)
     return TestClient(app)
 
 
@@ -84,6 +86,7 @@ def test_outfit_returns_502_when_storage_fails(tmp_path: Path) -> None:
     )
     app = create_app()
     app.dependency_overrides[get_outfit_service] = lambda: service
+    as_owner(app)
     api = TestClient(app)
     body: dict[str, Any] = {
         "video": make_video().model_dump(mode="json"),

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
@@ -19,10 +21,14 @@ class WardrobeSection extends StatefulWidget {
     this.repository,
     this.picker,
     this.onChanged,
+    this.header,
   });
 
   final WardrobeRepository? repository;
   final PhotoPicker? picker;
+
+  /// カードの上部に出す部品(ゲストのときのログインの案内。spec 038)
+  final Widget? header;
 
   /// 登録済みの服の一覧が変わったときに呼ばれる(読み込み中・失敗は null)
   final ValueChanged<List<RegisteredCloth>?>? onChanged;
@@ -145,7 +151,10 @@ class _WardrobeSectionState extends State<WardrobeSection> {
                 borderRadius: BorderRadius.circular(10),
                 child: SizedBox.square(
                   dimension: 96,
-                  child: ClothPhoto(url: _repository.imageUrl(item.image)),
+                  child: ClothPhoto(
+                    image: item.image,
+                    load: _repository.imageBytes,
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -186,6 +195,7 @@ class _WardrobeSectionState extends State<WardrobeSection> {
               style: const TextStyle(color: AppColors.muted),
             ),
       children: [
+        ?widget.header,
         const Hint(
           '服の写真を追加すると、AI が種類・色・素材などを読み取って登録します(1 回 $maxPhotosPerBatch 枚まで)。写真をタップすると読み取った内容を見られます。',
         ),
@@ -235,7 +245,7 @@ class _WardrobeSectionState extends State<WardrobeSection> {
             _ClothTile(
               key: ValueKey('cloth-${item.id}'),
               item: item,
-              imageUrl: _repository.imageUrl(item.image),
+              load: _repository.imageBytes,
               onTap: () => _showDetail(item),
               onDelete: () => _delete(item),
             ),
@@ -269,12 +279,42 @@ List<String> describeAttributes(ClothAttributes a) {
   ];
 }
 
-/// 登録済みの服の写真(読み込めない場合はアイコンを出す)。
-class ClothPhoto extends StatelessWidget {
-  const ClothPhoto({super.key, required this.url});
+/// 写真名から写真のバイト列を取得する関数(通常は [WardrobeRepository.imageBytes])。
+typedef PhotoLoader = Future<Uint8List> Function(String image);
 
-  /// 空文字ならプレースホルダを出す
-  final String url;
+/// 登録済みの服の写真(読み込み中・読み込めない場合はアイコンを出す)。
+///
+/// 写真はトークンが必要なため、URL を直接読み込まず、[load] でバイト列を取得して表示する
+/// (spec 038)。
+class ClothPhoto extends StatefulWidget {
+  const ClothPhoto({super.key, required this.image, required this.load});
+
+  /// 写真名。空文字ならプレースホルダを出す
+  final String image;
+  final PhotoLoader load;
+
+  @override
+  State<ClothPhoto> createState() => _ClothPhotoState();
+}
+
+class _ClothPhotoState extends State<ClothPhoto> {
+  Future<Uint8List>? _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  @override
+  void didUpdateWidget(ClothPhoto oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.image != widget.image) _fetch();
+  }
+
+  void _fetch() {
+    _bytes = widget.image.isEmpty ? null : widget.load(widget.image);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -282,13 +322,20 @@ class ClothPhoto extends StatelessWidget {
       color: AppColors.soft,
       child: Center(child: Icon(Icons.checkroom, color: AppColors.muted)),
     );
-    if (url.isEmpty) return placeholder;
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      // Flutter Web(CanvasKit)で読み込めない場合は <img> 要素で表示させる
-      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
-      errorBuilder: (context, error, stackTrace) => placeholder,
+    final bytes = _bytes;
+    if (bytes == null) return placeholder;
+    return FutureBuilder<Uint8List>(
+      future: bytes,
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+        if (data == null) return placeholder;
+        return Image.memory(
+          data,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) => placeholder,
+        );
+      },
     );
   }
 }
@@ -298,13 +345,13 @@ class _ClothTile extends StatelessWidget {
   const _ClothTile({
     super.key,
     required this.item,
-    required this.imageUrl,
+    required this.load,
     required this.onTap,
     required this.onDelete,
   });
 
   final RegisteredCloth item;
-  final String imageUrl;
+  final PhotoLoader load;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -319,7 +366,9 @@ class _ClothTile extends StatelessWidget {
             color: AppColors.soft,
             child: InkWell(
               onTap: onTap,
-              child: Ink(child: ClothPhoto(url: imageUrl)),
+              child: Ink(
+                child: ClothPhoto(image: item.image, load: load),
+              ),
             ),
           ),
         ),

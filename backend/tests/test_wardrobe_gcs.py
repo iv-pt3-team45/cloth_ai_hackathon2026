@@ -202,7 +202,8 @@ def test_agent_tools_read_clothes_from_gcs(monkeypatch: pytest.MonkeyPatch) -> N
     store = make_store(bucket)
     store.add(JPEG, "image/jpeg", [cloth("Tシャツ"), cloth("パーカー", colors=["黒"])], "", "m")
     monkeypatch.setattr(
-        "app.services.wardrobe.create_wardrobe_store", lambda settings: make_store(bucket)
+        "app.services.wardrobe.create_wardrobe_store",
+        lambda settings, owner=None: make_store(bucket),
     )
 
     list_wardrobe, search_wardrobe = build_wardrobe_tools(gcs_settings())
@@ -216,7 +217,8 @@ def test_agent_tools_read_clothes_from_gcs(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_agent_tools_report_empty_bucket(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.wardrobe.create_wardrobe_store", lambda settings: make_store(FakeBucket())
+        "app.services.wardrobe.create_wardrobe_store",
+        lambda settings, owner=None: make_store(FakeBucket()),
     )
 
     result = build_wardrobe_tools(gcs_settings())[0]()
@@ -231,7 +233,8 @@ def test_agent_tools_report_unreadable_bucket(monkeypatch: pytest.MonkeyPatch) -
 
     bucket = FakeBucket(fail_with=Forbidden("denied"))
     monkeypatch.setattr(
-        "app.services.wardrobe.create_wardrobe_store", lambda settings: make_store(bucket)
+        "app.services.wardrobe.create_wardrobe_store",
+        lambda settings, owner=None: make_store(bucket),
     )
 
     result = build_wardrobe_tools(gcs_settings())[1]("白")

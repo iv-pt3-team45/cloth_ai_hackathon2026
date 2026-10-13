@@ -189,6 +189,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--model", help="GEMINI_MODEL を一時的に上書きする")
     parser.add_argument("--index", help="参照する服インデックス(index.json)のパス")
+    parser.add_argument(
+        "--user", help="服を読むユーザー ID(アプリでログインして登録した服。spec 038)"
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="ライブラリのログも表示する")
     return parser.parse_args(argv)
 
@@ -208,6 +211,9 @@ def main(argv: list[str] | None = None) -> int:
         # 指定したファイルを必ず読む(WARDROBE_STORAGE=gcs でもローカルにする。spec 036)
         overrides["cloth_index_path"] = args.index
         overrides["wardrobe_storage"] = "local"
+    if args.user and not args.index:
+        # そのユーザーの置き場所(users/<ID>/wardrobe/)を読む。--index と一緒なら --index が優先
+        overrides["agent_wardrobe_user"] = args.user
 
     # 設定を差し替えるときだけ AgentService に渡す(既定は共有 Runner を使う)
     if overrides:
