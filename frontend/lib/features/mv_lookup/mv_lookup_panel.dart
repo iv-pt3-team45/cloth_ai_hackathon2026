@@ -33,7 +33,7 @@ typedef _LiveQuery = ({String query, DateTime? date, String? artist});
 ///
 /// - YouTube の URL または MV 名から、MV のメタ情報(アーティスト名・曲名・リンクなど)を調べる(spec 007)。
 /// - 動画情報が表示されたら、そのアーティストのカルチャー情報も自動で調べる(spec 008)。
-/// - 候補を選ぶと、選んだ 1 件だけを残して一覧を畳み、その直下に情報を展開する(spec 009 / 038)。
+/// - 候補を選ぶと、選んだ 1 件だけを残して一覧を畳み、その直下に情報を展開する(spec 009 / 039)。
 ///   「変更」で候補の一覧に戻る。
 /// - ② で、ライブ情報と当日の天気を調べる(spec 009)。
 /// - 取得中は、2 枚のカードのどちらの入力も受け付けない(ロックを共有するため 1 つの State で 2 枚を返す)。
@@ -80,7 +80,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
   /// 展開中の候補の動画 ID(候補から選んだとき)
   String? _expandedVideoId;
 
-  /// 切り替わりの演出の始点(選んだ候補、URL 入力のときは動画の情報。spec 038)
+  /// 切り替わりの演出の始点(選んだ候補、URL 入力のときは動画の情報。spec 039)
   final _burstOriginKey = GlobalKey();
   MvVideo? _video;
 
@@ -245,7 +245,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
     }
   }
 
-  /// カルチャー情報が届いたときに 1 回だけ、選んだ候補のあたりから MV の色を広げる(spec 038 D)。
+  /// カルチャー情報が届いたときに 1 回だけ、選んだ候補のあたりから MV の色を広げる(spec 039 D)。
   ///
   /// 演出を判定できないとき・動きを減らす設定のときは出さない。
   void _playBurst(MvVideo video, CultureReport report) {
@@ -395,7 +395,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
                 ),
               ],
             ),
-            // 入力を止めている理由(spec 038 AC-19)
+            // 入力を止めている理由(spec 039 AC-19)
             if (_cultureLoading) const CultureLockHint(),
             if (_error != null) ...[
               const SizedBox(height: 12),
@@ -440,7 +440,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
       ];
     }
 
-    // 候補を選んだら、選んだ 1 件だけを残して一覧を畳む(spec 038 AC-4)
+    // 候補を選んだら、選んだ 1 件だけを残して一覧を畳む(spec 039 AC-4)
     final selected = _candidates
         .where((c) => c.videoId == _expandedVideoId)
         .firstOrNull;
@@ -503,7 +503,7 @@ class _MvLookupPanelState extends State<MvLookupPanel> {
   }
 }
 
-/// 選んだ動画の情報(spec 038 A)。
+/// 選んだ動画の情報(spec 039 A)。
 ///
 /// 小さいサムネイル・曲名・アーティスト名・「YouTube で開く」の 1 まとまりにし、
 /// 動画タイトル・チャンネル・公開日・概要欄は「詳細」を開いたときだけ出す。

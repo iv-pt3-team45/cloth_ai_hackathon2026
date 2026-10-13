@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'culture_vibe.dart';
 
-/// カードの後ろで流し続ける背景の動き(spec 038 D)。
+/// カードの後ろで流し続ける背景の動き(spec 039 D)。
 ///
 /// [effect] が null、または [animate] が false(動きを減らす設定)のときは何も描かず、アニメーションも止める。
 /// 粒は数十個に抑え、`RepaintBoundary` でカードの再描画と切り離す(Web のスマホで重くしないため)。
@@ -283,7 +283,7 @@ class _VibePainter extends CustomPainter {
       oldDelegate.effect != effect || !listEquals(oldDelegate.colors, colors);
 }
 
-/// カルチャー情報が届いたときに 1 回だけ出す、切り替わりの演出(spec 038 D)。
+/// カルチャー情報が届いたときに 1 回だけ出す、切り替わりの演出(spec 039 D)。
 ///
 /// [origin] のウィジェットの中心から、[color] の円が画面いっぱいに広がりながら消える。
 /// 画面の操作は妨げない(`IgnorePointer`)。

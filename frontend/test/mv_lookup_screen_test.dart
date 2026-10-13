@@ -76,7 +76,7 @@ void main() {
     expect(find.text('候補一覧に戻る'), findsNothing);
   });
 
-  testWidgets('動画の情報は要点だけを出し、「詳細」で残りを開閉する(038 AC-1, AC-2)', (tester) async {
+  testWidgets('動画の情報は要点だけを出し、「詳細」で残りを開閉する(039 AC-1, AC-2)', (tester) async {
     await _pumpScreen(tester, FakeMvRepository(_videoResult));
     await _submit(tester, 'https://youtu.be/abcDEF12345');
 
@@ -101,7 +101,7 @@ void main() {
     expect(find.text('Ayase / YOASOBI'), findsNothing);
   });
 
-  testWidgets('「YouTube で開く」で動画の URL を開き、開けなければ知らせる(038 AC-3)', (tester) async {
+  testWidgets('「YouTube で開く」で動画の URL を開き、開けなければ知らせる(039 AC-3)', (tester) async {
     final opened = <Uri>[];
     var result = true;
     final original = openUrl;
@@ -151,7 +151,7 @@ void main() {
   });
 
   testWidgets(
-    'MV 名を入力すると候補が出て、選ぶと選んだ候補だけを残して直下に情報を出す(007 AC-3, AC-4 / 038 AC-4)',
+    'MV 名を入力すると候補が出て、選ぶと選んだ候補だけを残して直下に情報を出す(007 AC-3, AC-4 / 039 AC-4)',
     (tester) async {
       final repo = FakeMvRepository(
         (query) async => query.startsWith('https://')
@@ -188,7 +188,7 @@ void main() {
     },
   );
 
-  testWidgets('「変更」で候補の一覧に戻り、動画の情報は消える(038 AC-5)', (tester) async {
+  testWidgets('「変更」で候補の一覧に戻り、動画の情報は消える(039 AC-5)', (tester) async {
     final repo = FakeMvRepository(
       (query) async => query.startsWith('https://')
           ? const MvLookupResult(inputType: 'url', video: _video)

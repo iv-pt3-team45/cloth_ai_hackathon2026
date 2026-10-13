@@ -11,7 +11,7 @@ import 'grounding_footer.dart';
 /// 動画のアーティストのカルチャー情報(spec 008)を表示する。
 ///
 /// 取得の開始と入力のロックは [MvLookupPanel] が行い、ここは状態に応じた表示だけを担う。
-/// 調べている途中・失敗・特定できないときは薄い茶の枠(spec 015)、届いたら要点のカード(spec 038)。
+/// 調べている途中・失敗・特定できないときは薄い茶の枠(spec 015)、届いたら要点のカード(spec 039)。
 class CultureSection extends StatelessWidget {
   const CultureSection({
     super.key,
@@ -46,7 +46,7 @@ class CultureSection extends StatelessWidget {
   }
 }
 
-/// カルチャー情報の要点のカード(spec 038 C)。
+/// カルチャー情報の要点のカード(spec 039 C)。
 ///
 /// アーティスト名・スタイル・よく使う色・この MV の衣装・出典・検索候補を出し、
 /// 全項目は「くわしく見る」のポップアップで見せる。現れるときは弾むように出て、中の項目が順に浮かび上がる。
@@ -218,7 +218,7 @@ class _OutfitDigest extends StatelessWidget {
   }
 }
 
-/// カルチャー情報を調べている間、① ② の検索の下に出す「入力を止めている理由」(spec 038 AC-19)。
+/// カルチャー情報を調べている間、① ② の検索の下に出す「入力を止めている理由」(spec 039 AC-19)。
 class CultureLockHint extends StatelessWidget {
   const CultureLockHint({super.key});
 

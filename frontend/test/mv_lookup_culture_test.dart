@@ -130,7 +130,7 @@ void main() {
     expect(culture.videos.single.videoId, 'abcDEF12345');
     expect(_inputEnabled(tester), isFalse);
 
-    // 他の候補は畳まれ、取得中は「変更」を押しても反応しない(spec 038 AC-6)
+    // 他の候補は畳まれ、取得中は「変更」を押しても反応しない(spec 039 AC-6)
     expect(find.text('アイドル LIVE映像'), findsNothing);
     await tester.tap(find.text('変更'));
     await tester.pump();
@@ -142,7 +142,7 @@ void main() {
     pending.complete(fullReport);
     await tester.pumpAndSettle();
 
-    // 取得が終われば「変更」で一覧に戻して別の候補を選べ、取得し直す(009 AC-2 / 038 AC-5)
+    // 取得が終われば「変更」で一覧に戻して別の候補を選べ、取得し直す(009 AC-2 / 039 AC-5)
     await tester.tap(find.text('変更'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('アイドル LIVE映像'));
@@ -156,7 +156,7 @@ void main() {
     expect(find.text('YOASOBI「アイドル」 Official Music Video'), findsNothing);
   });
 
-  testWidgets('取得中は ① ② の検索の下に理由を出し、終わると消える(spec 038 AC-19)', (tester) async {
+  testWidgets('取得中は ① ② の検索の下に理由を出し、終わると消える(spec 039 AC-19)', (tester) async {
     const reason = 'カルチャー情報を調べ終わるまで、検索・選び直しはできません';
     final pending = Completer<CultureReport>();
     final culture = FakeCultureRepository((video) => pending.future);
@@ -181,7 +181,7 @@ void main() {
     expect(find.text(reason), findsNothing);
   });
 
-  testWidgets('取得が終わると要点のカードを出し、出典と検索候補も表示する(AC-3, AC-5 / 038 AC-7)', (
+  testWidgets('取得が終わると要点のカードを出し、出典と検索候補も表示する(AC-3, AC-5 / 039 AC-7)', (
     tester,
   ) async {
     final culture = FakeCultureRepository((video) async => fullReport);
@@ -213,7 +213,7 @@ void main() {
     expect(find.text('アニメーションと実写の融合'), findsNothing);
   });
 
-  testWidgets('「くわしく見る」でポップアップが開き、3 つのタブで全項目を見られる(AC-4 / 038 AC-8〜10)', (
+  testWidgets('「くわしく見る」でポップアップが開き、3 つのタブで全項目を見られる(AC-4 / 039 AC-8〜10)', (
     tester,
   ) async {
     final culture = FakeCultureRepository((video) async => fullReport);
@@ -268,7 +268,7 @@ void main() {
     footerShown();
   });
 
-  group('ポップアップは ✕ / 背景 / Esc / 下へのスワイプで閉じる(038 AC-11)', () {
+  group('ポップアップは ✕ / 背景 / Esc / 下へのスワイプで閉じる(039 AC-11)', () {
     Future<void> open(WidgetTester tester) async {
       final culture = FakeCultureRepository((video) async => fullReport);
       await _pumpScreen(tester, _mvRepository(), culture);
@@ -309,7 +309,7 @@ void main() {
     });
   });
 
-  testWidgets('動きを減らす設定では、要点のカードは最初から表示済み(038 AC-17)', (tester) async {
+  testWidgets('動きを減らす設定では、要点のカードは最初から表示済み(039 AC-17)', (tester) async {
     tester.view.physicalSize = const Size(1200, 4000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -367,7 +367,7 @@ void main() {
     await _submit(tester, 'https://youtu.be/abcDEF12345');
     await tester.pumpAndSettle();
 
-    // よく使う色は色の丸付きで出る(spec 038)
+    // よく使う色は色の丸付きで出る(spec 039)
     expect(find.byKey(const ValueKey('color-dot-黒')), findsOneWidget);
     expect(find.textContaining('映像を解析できませんでした'), findsOneWidget);
   });

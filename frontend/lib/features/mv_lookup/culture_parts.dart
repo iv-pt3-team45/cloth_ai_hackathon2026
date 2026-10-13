@@ -5,7 +5,7 @@ import '../../core/widgets.dart';
 import 'culture_models.dart';
 import 'culture_vibe.dart';
 
-// カルチャー情報(spec 008)の項目の部品。要点のカードとポップアップ(spec 038)の両方で使う。
+// カルチャー情報(spec 008)の項目の部品。要点のカードとポップアップ(spec 039)の両方で使う。
 
 /// 項目の見出し(灰色の小さい文字)。
 class CultureLabel extends StatelessWidget {
@@ -46,7 +46,7 @@ class CultureChips extends StatelessWidget {
   }
 }
 
-/// 「よく使う色」の一覧。辞書で色が分かるものは、Pill の左に色の丸を付ける(spec 038)。
+/// 「よく使う色」の一覧。辞書で色が分かるものは、Pill の左に色の丸を付ける(spec 039)。
 class CultureColors extends StatelessWidget {
   const CultureColors({super.key, required this.values});
 

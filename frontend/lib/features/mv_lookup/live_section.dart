@@ -37,7 +37,7 @@ class LiveSection extends StatefulWidget {
   /// ① ② のどこかで取得中。この間は入力を受け付けない
   final bool busy;
 
-  /// カルチャー情報を取得中(入力を止めている理由を出す。spec 038)
+  /// カルチャー情報を取得中(入力を止めている理由を出す。spec 039)
   final bool cultureLoading;
 
   /// ライブ情報を取得中
@@ -159,7 +159,7 @@ class _LiveSectionState extends State<LiveSection> {
             ),
           ],
         ),
-        // 入力を止めている理由(spec 038 AC-19)
+        // 入力を止めている理由(spec 039 AC-19)
         if (widget.cultureLoading) const CultureLockHint(),
         _DetailToggle(
           open: _showDetails,

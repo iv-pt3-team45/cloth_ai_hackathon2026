@@ -61,7 +61,7 @@ class _Fakes {
 
 /// 画面を出す。
 ///
-/// 演出の背景の動き(spec 038)は止まらないため、既定では端末の「動きを減らす」を有効にして
+/// 演出の背景の動き(spec 039)は止まらないため、既定では端末の「動きを減らす」を有効にして
 /// pumpAndSettle が終わるようにする。動きを確かめるテストだけ [reduceMotion] を false にする。
 Future<void> _pump(
   WidgetTester tester,
@@ -146,7 +146,7 @@ void main() {
     expect(find.bySemanticsLabel('手持ちの服(2点)(OK)'), findsOneWidget);
   });
 
-  testWidgets('入力が済んだカードの番号の丸は緑の ✓ になる(spec 038 AC-18)', (tester) async {
+  testWidgets('入力が済んだカードの番号の丸は緑の ✓ になる(spec 039 AC-18)', (tester) async {
     await _pump(tester, _Fakes(clothes: const []));
 
     bool done(int step) => tester
@@ -166,7 +166,7 @@ void main() {
     expect(find.bySemanticsLabel('3'), findsOneWidget);
   });
 
-  testWidgets('服が 1 点以上あれば ③ は最初から ✓(spec 038 AC-18)', (tester) async {
+  testWidgets('服が 1 点以上あれば ③ は最初から ✓(spec 039 AC-18)', (tester) async {
     await _pump(tester, _Fakes());
 
     final badge = tester.widget<StepBadge>(
@@ -175,7 +175,7 @@ void main() {
     expect(badge.done, isTrue);
   });
 
-  group('MV のカルチャーに合わせた演出(spec 038 D)', () {
+  group('MV のカルチャーに合わせた演出(spec 039 D)', () {
     CultureReport report({
       List<String> styles = const [],
       List<String> colors = const [],

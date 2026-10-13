@@ -20,7 +20,7 @@ class SectionCard extends StatelessWidget {
   /// 見出しの前に出す番号(入力画面の ①②③)
   final int? step;
 
-  /// 入力が済んだか。済んだら番号の丸を緑の ✓ にする(spec 038)
+  /// 入力が済んだか。済んだら番号の丸を緑の ✓ にする(spec 039)
   final bool done;
   final Widget? trailing;
   final List<Widget> children;
@@ -77,7 +77,7 @@ class SectionCard extends StatelessWidget {
   }
 }
 
-/// 入力画面の ①②③ の番号の丸。済んだら緑の ✓ にする(spec 038)。
+/// 入力画面の ①②③ の番号の丸。済んだら緑の ✓ にする(spec 039)。
 class StepBadge extends StatelessWidget {
   const StepBadge({super.key, required this.step, required this.done});
 
@@ -205,7 +205,7 @@ class MessageBox extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 16),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      // 暗い背景(spec 038)の上でも読めるよう、白の下地に色を重ねる
+      // 暗い背景(spec 039)の上でも読めるよう、白の下地に色を重ねる
       color: Color.alphaBlend(color.withValues(alpha: 0.08), Colors.white),
       border: Border.all(color: color.withValues(alpha: 0.5)),
       borderRadius: BorderRadius.circular(12),

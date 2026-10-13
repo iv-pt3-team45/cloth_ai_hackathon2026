@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// アプリ全体の配色(参考 UI `tadasii/` と同じ。spec 015)。
 ///
-/// 差し色(accent / accent2 / selected / bg)は MV に合わせて変わるため、画面では [AppPalette.of] から読む(spec 038)。
+/// 差し色(accent / accent2 / selected / bg)は MV に合わせて変わるため、画面では [AppPalette.of] から読む(spec 039)。
 /// ここの値は標準の配色([AppPalette.standard])と、差し色以外の色(文字・枠・ok・ng)。
 abstract final class AppColors {
   static const bg = Color(0xFFF6F3EF);
@@ -20,7 +20,7 @@ abstract final class AppColors {
   static const selected = Color(0xFFFDEEF1);
 }
 
-/// 画面の差し色と背景(spec 038)。MV のカルチャー情報に合わせて切り替える。
+/// 画面の差し色と背景(spec 039)。MV のカルチャー情報に合わせて切り替える。
 @immutable
 class AppPalette extends ThemeExtension<AppPalette> {
   const AppPalette({
@@ -185,7 +185,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
   );
 }
 
-/// アプリ全体のテーマ(spec 015)。差し色は [palette] から作る(spec 038)。
+/// アプリ全体のテーマ(spec 015)。差し色は [palette] から作る(spec 039)。
 ThemeData buildTheme({AppPalette palette = AppPalette.standard}) {
   final scheme = ColorScheme.fromSeed(
     seedColor: palette.accent,

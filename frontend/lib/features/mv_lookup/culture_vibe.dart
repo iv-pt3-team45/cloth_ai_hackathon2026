@@ -4,7 +4,7 @@ import '../../core/theme.dart';
 import 'culture_models.dart';
 import 'mv_models.dart';
 
-/// 背景で流し続ける動きの種類(spec 038)。
+/// 背景で流し続ける動きの種類(spec 039)。
 enum VibeEffect {
   /// きらめき: 星とハートが舞い上がる
   sparkle,
@@ -22,7 +22,7 @@ enum VibeEffect {
   bool get dark => this == sparks || this == neon;
 }
 
-/// カルチャー情報から導き出す、画面の演出の設定(spec 038)。
+/// カルチャー情報から導き出す、画面の演出の設定(spec 039)。
 ///
 /// 判定に使うのは `fashion.colors`(色の名前)と `fashion.styles`(スタイルの言葉)だけ。
 /// Gemini の応答は言い回しが毎回少し違うため、言葉の部分一致で判定し、外れたら「演出なし」に倒す。

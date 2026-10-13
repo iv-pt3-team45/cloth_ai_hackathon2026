@@ -187,7 +187,7 @@ class _HomePageState extends State<HomePage> {
         _attempted && missing.isEmpty && _snapshot.cultureLoading;
     final failure = _phase == Phase.input ? _outfit.error : null;
     final suggestion = _outfit.suggestion;
-    // MV のカルチャーに合わせた演出(spec 038)。選択を外せば null になり、標準の配色に戻る
+    // MV のカルチャーに合わせた演出(spec 039)。選択を外せば null になり、標準の配色に戻る
     final vibe = CultureVibe.from(_snapshot.video, _snapshot.culture);
     final reduceMotion = reduceMotionOf(context);
 
@@ -407,7 +407,7 @@ class _Header extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // カードの外の文字なので、暗い背景(spec 038)では白にする
+                  // カードの外の文字なので、暗い背景(spec 039)では白にする
                   Text(
                     'はじめてのライブ服',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(

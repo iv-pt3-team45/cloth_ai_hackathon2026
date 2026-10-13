@@ -1,4 +1,4 @@
-// 端末の「動きを減らす」設定(spec 038)。
+// 端末の「動きを減らす」設定(spec 039)。
 // Flutter Web は OS の設定(prefers-reduced-motion)を MediaQuery.disableAnimations に反映しないため、
 // Web ではブラウザの設定を直接読む。
 import 'package:flutter/widgets.dart';
