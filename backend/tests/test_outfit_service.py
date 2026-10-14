@@ -335,6 +335,8 @@ async def test_generate_image_passes_mannequin_and_photos(tmp_path: Path) -> Non
     # コーデ名は入れない(ロゴ入りの服と重なると画像が返らなかったため)
     assert "コーデ名" not in instruction
     assert "写真に無い服や小物を足さないこと" in instruction
+    # マネキンの黒のインナーは提案の服で覆う
+    assert "黒のインナーは、着せた服で覆って見えないようにすること" in instruction
     # 生成画像は created_images/ に保存し、base64 でも返す
     assert base64.b64decode(result.data) == GENERATED
     assert result.mime_type == "image/png"
