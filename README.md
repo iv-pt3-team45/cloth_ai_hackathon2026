@@ -1,4 +1,4 @@
-<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/9ccaed96-8730-4729-90e5-004d5b89e28a" /># THE FIRST KITAKE
+# THE FIRST KITAKE
 
 行くライブと手持ちの服から、会場で浮かないコーディネートを提案する Web アプリ。
 
@@ -7,6 +7,7 @@
 | アプリ(ここから使う) | https://ai-agent-hackathon-508804.web.app |
 
 | デモ用アカウント | パスワード |
+| --- | --- |
 | demo01 | wD04wjjIgUrTyXt6 |
 | demo02 | h8GeFnYlAI7pFDhH |
 | demo03 | GsCkC0vIH_12ace3 |
