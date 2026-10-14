@@ -204,6 +204,8 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
   **コーデ名は入れない**(下の検証で、ロゴ入りの服とライブ名を含むコーデ名が重なると画像が返らなかったため。2026-10-05)。
 - 指示: マネキンに指定の服をそのまま着せる。写真の色・柄・形・プリントを忠実に再現する。写真に無い服や小物を足さない。
   マネキンの姿勢・台・背景・画角はそのまま保つ。
+  マネキンが着ている黒のインナー(スポーツブラとショートパンツ)は、着せた服で覆って見えないようにする
+  (2026-10-14 追記。マネキンを黒のインナーを着た画像 `black_manekin.jpg` に変えたため。指示文でもマネキンをそう説明する)。
 - `response_modalities=["IMAGE"]`(**テキストの出力は許さない**)。応答の最初の画像を使う。
   当初は spec 003 と同じ `["TEXT", "IMAGE"]` だったが、正常終了(`finish_reason=STOP`)なのに空のテキストだけが返り、
   画像が無いことが度々あったため変更した(2026-10-02)。
@@ -220,7 +222,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 | --- | --- | --- |
 | `outfit_model` | `gemini-3.5-flash-lite` | 提案に使うモデル(未決事項 1 の決定: `GEMINI_MODEL` とは別に設ける) |
 | `outfit_timeout` | `120` | 提案の待ち時間の上限(秒) |
-| `outfit_mannequin_path` | `app/assets/white_manekin_9vs16.jpg` | マネキン画像(backend/ からの相対)。2026-10-08 に縦長(9:16、768×1376)の画像に変更。元の横長の `white_manekin.jpeg` は残している |
+| `outfit_mannequin_path` | `app/assets/black_manekin.jpg` | マネキン画像(backend/ からの相対)。2026-10-08 に縦長(9:16、768×1376)の画像に変更。2026-10-14 に黒のインナー(スポーツブラとショートパンツ)を着た白いマネキンの画像(同じ 768×1376)に変更。以前の `white_manekin.jpeg`(横長)・`white_manekin_9vs16.jpg` は残している |
 | `venue_info_timeout` | `30` | 提案の前に会場の形態(spec 014)を調べる待ち時間の上限(秒)。超えたら形態なしで提案する |
 | `image_model` / `media_generation_timeout` | (既存) | 画像の生成に使うモデルと、待ち時間の上限 |
 

@@ -311,7 +311,7 @@ tx_hackathon_gc/
 │   │   │                     #   wardrobe_store.py, wardrobe_gcs.py, wardrobe_registry.py, outfit.py,
 │   │   │                     #   input_guard.py(入力のチェック)、
 │   │   │                     #   auth.py, user_store.py, user_store_gcs.py(ログイン)ほか
-│   │   ├── assets/           # アプリが使う固定の画像(コーデ画像のマネキン white_manekin_9vs16.jpg。Git 管理)
+│   │   ├── assets/           # アプリが使う固定の画像(コーデ画像のマネキン black_manekin.jpg。Git 管理)
 │   │   ├── created_images/   # 生成された画像の保存先(Git 管理外)
 │   │   └── created_videos/   # 生成された動画の保存先(Git 管理外)
 │   ├── data/                 # WARDROBE_STORAGE=local のときの保存先(Git 管理外)
@@ -440,7 +440,7 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `LIVE_SEARCH_TIMEOUT` | `120.0` | ライブ情報の検索全体の待ち時間上限(秒) |
 | `OUTFIT_MODEL` | `gemini-3.5-flash-lite` | コーデ提案(4.12)で、手持ちの服から組み合わせを選ぶモデル。画像の生成は `IMAGE_MODEL` |
 | `OUTFIT_TIMEOUT` | `120.0` | コーデ提案(文字)の待ち時間上限(秒) |
-| `OUTFIT_MANNEQUIN_PATH` | `app/assets/white_manekin_9vs16.jpg` | 服を着せるマネキン画像(backend/ からの相対。縦長 9:16) |
+| `OUTFIT_MANNEQUIN_PATH` | `app/assets/black_manekin.jpg` | 服を着せるマネキン画像(backend/ からの相対。縦長 9:16) |
 | `VENUE_INFO_MODEL` | `gemini-2.5-flash` | 会場の形態(スタンディング / 着席 / 混在)を Google 検索で調べるモデル(spec 014) |
 | `VENUE_INFO_TIMEOUT` | `30.0` | 会場の形態を調べる待ち時間の上限(秒)。超えたら「不明」として進める |
 
@@ -1615,7 +1615,7 @@ git commit -m "fix: 空メッセージ送信時に 500 になる問題を修正"
 | 「コーディネートを提案してもらう」を押しても始まらない | 画面上部の「入力内容を確認してください」を見る。① で MV の表示・② で候補の選択・③ で手持ちの服 1 点以上が必要。カルチャー情報の取得中も始まらない |
 | 普通の入力なのに「使えない表現(AI への指示のような文)が含まれています」(400)で断られる | 不審な言い回しの規則に誤って当たった。バックエンドのログの `rule=` で規則を確認し、`app/services/input_guard.py` の `RULES` / `COOCCURRENCE_RULES` を直して `tests/test_input_guard.py` の `SAFE` に例を足す(4.14) |
 | 入力が「制御文字が含まれています」(422)で断られる | 貼り付けた文字に見えない制御文字が混ざっている。打ち直すか、テキストエディタで制御文字を取り除く(4.14) |
-| コーデ画像が `マネキン画像が見つかりません`(502) | `backend/app/assets/white_manekin_9vs16.jpg` が無い(未コミット・未取得など)か、`OUTFIT_MANNEQUIN_PATH` の誤り。パスは backend/ からの相対 |
+| コーデ画像が `マネキン画像が見つかりません`(502) | `backend/app/assets/black_manekin.jpg` が無い(未コミット・未取得など)か、`OUTFIT_MANNEQUIN_PATH` の誤り。パスは backend/ からの相対 |
 | コーデ画像が `モデルが画像を返しませんでした`(502) | 応答は正常(200)だが画像が入っていなかった。以前はテキストの出力も許していたため空のテキストだけが返ることがあり、今は画像だけを返させている(`response_modalities=["IMAGE"]`)ため、モデルが画像を出さないとログに `finish_reason=NO_IMAGE` が出る。ライブ名を含むコーデ名とロゴ入りの服が重なると続くことがあったため、画像の指示文にはコーデ名を入れていない(spec 011 design.md 6.2)。「条件を変えてもう一度」→「コーディネートを提案してもらう」で別の組み合わせを作り直す。`finish_reason` が `SAFETY` などなら入力の写真を見直し、`IMAGE_MODEL` が画像の入力と出力に対応しているか確認する |
 | コーデ提案が `手持ちの服からコーデを作れませんでした`(502) | Gemini が手持ちに無い服だけを返した(サーバ側で取り除いた結果 0 点)。もう一度押す。服の登録が少ない場合は増やす |
 | コーデ提案 / 画像が `Gemini のクォータ…`(503)/ `… 秒以内に終わりませんでした`(504) | 時間をおく、`OUTFIT_MODEL`(提案)・`IMAGE_MODEL`(画像)を変える、`OUTFIT_TIMEOUT` / `MEDIA_GENERATION_TIMEOUT` を延ばす |

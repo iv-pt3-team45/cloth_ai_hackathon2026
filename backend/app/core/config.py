@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     # 提案の待ち時間の上限(秒)。画像の生成は MEDIA_GENERATION_TIMEOUT
     outfit_timeout: float = 120.0
     # 提案の服を着せるマネキン画像(backend/ からの相対パス)
-    outfit_mannequin_path: str = "app/assets/white_manekin_9vs16.jpg"
+    outfit_mannequin_path: str = "app/assets/black_manekin.jpg"
 
     gemini_system_instruction: str = "あなたは日本語で簡潔かつ正確に回答するアシスタントです。"
 
