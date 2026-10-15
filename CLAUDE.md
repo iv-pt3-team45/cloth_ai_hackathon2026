@@ -162,7 +162,7 @@ main にマージすると自動で更新されます(詳細は [4.13](#413-本�
 | 外部 API | Gemini(Google Cloud Vertex AI) | ADK 経由で呼び出す。**認証は ADC**(鍵ファイルは使わない)。テキスト系のモデルは**基本 `gemini-3.5-flash-lite`**(3.2) |
 | 外部 API | YouTube Data API v3 | MV のメタ情報取得(4.8)。`httpx` で直接呼ぶ。**認証は API キー**(例外。3.4) |
 | 外部 API | Grounding with Google Search / YouTube の動画入力(Vertex AI) | カルチャー情報(4.9)・ライブ情報(4.10)。`google-genai` で直接呼ぶ(ADK は経由しない)。認証は ADC。検索は別途課金 |
-| メディア生成 | 画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4)。画像はコーデ提案でマネキンに服を着せるのにも使う(4.12) |
+| メディア生成 | 画像 `gemini-nano-banana-2.1`(Nano Banana 2.1)/ 動画 `gemini-omni-1.1-flash-preview` | エージェントのツールとして呼ばれる(4.4)。画像はコーデ提案でマネキンに服を着せるのにも使う(4.12) |
 | 保存先 | Cloud Storage(`google-cloud-storage`) | 手持ちの服の写真と `index.json`(4.11)。`WARDROBE_STORAGE=gcs` のとき。既定はローカル(3.5。spec 036)。認証は ADC |
 | ログイン | 自前(パスワードは `hashlib.scrypt`、トークンは JWT = `PyJWT`) | 事前に登録したユーザーだけがログインできる。ログインしない人はゲスト(3.6。spec 038)。外部の認証サービスは使わない |
 | 実行環境 | Docker Compose | フロント / バックを 1 コマンドで同時起動 |
@@ -412,7 +412,7 @@ cp .env.example .env            # Docker Compose を使う場合のみ
 | `GEMINI_SYSTEM_INSTRUCTION` | (指示文) | エージェントの役割・口調。`LlmAgent` の instruction になる |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | 使用モデル。利用可能な名前は 10. の方法で確認できる |
 | `GEMINI_TEMPERATURE` / `GEMINI_MAX_OUTPUT_TOKENS` | `0.7` / `2048` | 生成パラメータ |
-| `IMAGE_MODEL` | `gemini-3.1-flash-lite-image` | 画像生成モデル |
+| `IMAGE_MODEL` | `gemini-nano-banana-2.1` | 画像生成モデル(Nano Banana 2.1) |
 | `VIDEO_MODEL` | `gemini-omni-1.1-flash-preview` | 動画生成モデル(Interactions API 経由) |
 | `CREATED_IMAGES_DIR` / `CREATED_VIDEOS_DIR` | `app/created_images` / `app/created_videos` | 生成物の保存先(backend/ からの相対) |
 | `MEDIA_GENERATION_TIMEOUT` | `300` | 動画生成と、コーデ画像の生成(4.12)の待ち時間上限(秒) |
@@ -730,7 +730,7 @@ uv run python scripts/run_agent.py -m "夕暮れの海の波の短い動画を�
 
 | 種類 | モデル | 保存先 | 所要時間の目安 |
 | --- | --- | --- | --- |
-| 画像 | `IMAGE_MODEL`(既定: `gemini-3.1-flash-lite-image`) | `backend/app/created_images/` | 数秒 |
+| 画像 | `IMAGE_MODEL`(既定: `gemini-nano-banana-2.1`) | `backend/app/created_images/` | 数秒 |
 | 動画 | `VIDEO_MODEL`(既定: `gemini-omni-1.1-flash-preview`) | `backend/app/created_videos/` | 数十秒 |
 
 ファイル名は `image-20260917-145042-ef7543.jpg` のように日時 + ランダム文字列で衝突しない。
@@ -1078,7 +1078,7 @@ Web アプリは**下部のタブが無い 1 画面**で、上部の段階表示
 - 押すと次の 2 段階で進む。
   1. **提案**(`OUTFIT_MODEL`): 手持ちの服のインデックス・MV・アーティスト・カルチャー・ライブ・天気をまとめて Gemini に渡し、
      手持ちの服から 1 コーデを選ばせる。Google 検索は使わない。**手持ちに無い服(ID)を返しても、サーバ側で取り除く**(除いた点数を画面に出す)。
-  2. **画像**(`IMAGE_MODEL` = Nano Banana 2 Flash Lite。**画像だけを返させ、テキストの出力は許さない**): マネキン画像(`OUTFIT_MANNEQUIN_PATH`)と、提案の服が写った**登録した写真そのもの**を渡し、
+  2. **画像**(`IMAGE_MODEL` = Nano Banana 2.1。**画像だけを返させ、テキストの出力は許さない**): マネキン画像(`OUTFIT_MANNEQUIN_PATH`)と、提案の服が写った**登録した写真そのもの**を渡し、
      マネキンに着せた画像を 1 枚作る。1 枚の写真に複数の服が写っていれば、どの服を使うかを指示文で伝える。
      画像は `backend/app/created_images/outfit-*` にも残る(Git 管理外。4.4 と同じ)。
 - 提案が失敗したら入力の段階に戻り、上部に理由が出る。もう一度押せばやり直す。
