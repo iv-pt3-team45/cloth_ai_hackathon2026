@@ -88,6 +88,32 @@ def test_generate_image_requests_image_only(
     assert Path(str(result["path"])).read_bytes() == b"png"
 
 
+def test_generate_image_skips_thought_images(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """考える過程(thought)の下書きの画像ではなく、完成の画像を保存する(Nano Banana 2.1)。"""
+
+    class FakeModels:
+        def generate_content(
+            self, *, model: str, contents: str, config: types.GenerateContentConfig
+        ) -> types.GenerateContentResponse:
+            draft = types.Part(
+                inline_data=types.Blob(data=b"draft", mime_type="image/png"), thought=True
+            )
+            final = types.Part.from_bytes(data=b"final", mime_type="image/png")
+            content = types.Content(role="model", parts=[draft, final])
+            return types.GenerateContentResponse(candidates=[types.Candidate(content=content)])
+
+    class FakeClient:
+        models = FakeModels()
+
+    monkeypatch.setattr(media, "get_media_client", lambda: FakeClient())
+
+    result = media._generate_image("青空", Settings(created_images_dir=str(tmp_path)))
+
+    assert Path(str(result["path"])).read_bytes() == b"final"
+
+
 def test_generate_video_returns_error_dict_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(prompt: str, settings: Settings) -> dict[str, object]:
         raise MediaGenerationError("失敗")

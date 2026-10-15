@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     gemini_temperature: float = 0.7
     gemini_max_output_tokens: int = 2048
     # --- メディア生成 ---
-    image_model: str = "gemini-3.1-flash-lite-image"
+    image_model: str = "gemini-nano-banana-2.1"
     video_model: str = "gemini-omni-1.1-flash-preview"
     created_images_dir: str = "app/created_images"
     created_videos_dir: str = "app/created_videos"

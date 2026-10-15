@@ -380,6 +380,28 @@ async def test_generate_image_fails_without_image(tmp_path: Path) -> None:
         await service.generate_image([ids["Tシャツ"]])
 
 
+async def test_generate_image_skips_thought_images(tmp_path: Path) -> None:
+    """考える過程(thought)の下書きの画像ではなく、完成の画像を使う(Nano Banana 2.1)。"""
+    settings = make_settings(tmp_path)
+    ids = register_clothes(settings)
+    draft = types.Part(inline_data=types.Blob(data=b"draft", mime_type="image/png"), thought=True)
+    final = types.Part(inline_data=types.Blob(data=GENERATED, mime_type="image/png"))
+    with_thoughts = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    role="model", parts=[types.Part(text="考え中", thought=True), draft, final]
+                )
+            )
+        ]
+    )
+    service, _ = make_service(settings, responder(image=with_thoughts))
+
+    result = await service.generate_image([ids["Tシャツ"]])
+
+    assert base64.b64decode(result.data) == GENERATED
+
+
 async def test_generate_image_errors(tmp_path: Path) -> None:
     """AC-13"""
     settings = make_settings(tmp_path)

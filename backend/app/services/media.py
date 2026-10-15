@@ -113,7 +113,8 @@ def _generate_image(prompt: str, settings: Settings) -> dict[str, Any]:
     parts = (candidates[0].content.parts or []) if candidates and candidates[0].content else []
     for part in parts:
         inline = part.inline_data
-        if inline and inline.data:
+        # 考える過程(thought)の画像は下書きなので使わない(Nano Banana 2.1 は完成の画像の前に返す)
+        if inline and inline.data and not part.thought:
             mime_type = inline.mime_type or "image/png"
             path = save_media(
                 inline.data,

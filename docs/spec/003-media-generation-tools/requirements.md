@@ -15,7 +15,7 @@ ADK のツール(Function Calling)としてメディア生成を持たせ、エ�
 - ユーザーが**画像生成を望んだ場合**、エージェントが画像生成ツールを呼んで画像を生成する。
 - 生成した画像を `backend/app/created_images/` に保存し、保存先をユーザーに伝える。
 - 同様に動画も生成できる。
-- 使用モデルは設定で変更できる(既定は画像 `gemini-3.1-flash-lite-image` / 動画 `gemini-omni-1.1-flash-preview`)。
+- 使用モデルは設定で変更できる(既定は画像 `gemini-nano-banana-2.1`(2026-10-14 に `gemini-3.1-flash-lite-image` から変更)/ 動画 `gemini-omni-1.1-flash-preview`)。
 
 ### 非ゴール
 - 生成した画像・動画を HTTP API のレスポンスとして返すこと(保存先パスを返すのみ)。

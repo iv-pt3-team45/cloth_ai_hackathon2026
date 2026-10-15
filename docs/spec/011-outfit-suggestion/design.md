@@ -38,7 +38,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
                                                                    ② POST /api/v1/outfit/image {item_ids, title}
                                                                         → OutfitService.generate_image
                                                                            ├─ マネキン画像 + 服の写真(保存先から)
-                                                                           ├─ Nano Banana 2 Flash Lite(IMAGE_MODEL)
+                                                                           ├─ Nano Banana 2.1(IMAGE_MODEL)
                                                                            └─ 生成画像を created_images/ に保存し、base64 でも返す
 ```
 
@@ -82,7 +82,7 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
 
 リクエスト: `{ "item_ids": ["3f9c0d2e1a7b", "…"], "title": "…" }`(1〜10 件)。`title` は互換のため受け取るが、画像の生成には使わない(6.2)
 
-レスポンス (200): `{ "mime_type": "image/png", "data": "<base64>", "file_name": "outfit-….png", "model": "gemini-3.1-flash-lite-image" }`
+レスポンス (200): `{ "mime_type": "image/png", "data": "<base64>", "file_name": "outfit-….png", "model": "gemini-nano-banana-2.1" }`
 
 - 服の写真はバックエンドが保存先から読む。手持ちに無い id があれば 400。
 - 生成した画像は spec 003 と同じ `created_images/` に保存し、画面に出すために base64 でも返す。
@@ -207,6 +207,9 @@ HomeShell(main.dart) ── ValueNotifier<MvLookupSnapshot> ──→ ConfirmScr
   マネキンが着ている黒のインナー(スポーツブラとショートパンツ)は、着せた服で覆って見えないようにする
   (2026-10-14 追記。マネキンを黒のインナーを着た画像 `black_manekin.jpg` に変えたため。指示文でもマネキンをそう説明する)。
 - `response_modalities=["IMAGE"]`(**テキストの出力は許さない**)。応答の最初の画像を使う。
+  ただし考える過程(`thought`)の画像は下書きなので飛ばす(2026-10-14 追記。モデルを Nano Banana 2.1 に変えたため。
+  設定なしで呼ぶと下書きの画像が完成の画像の前に返る。`["IMAGE"]` での試行 1 回では下書きは返らず完成の画像 1 枚だけで、
+  白 T シャツ + チノパンを黒のインナーを覆って着せられた。所要 約 24 秒)。
   当初は spec 003 と同じ `["TEXT", "IMAGE"]` だったが、正常終了(`finish_reason=STOP`)なのに空のテキストだけが返り、
   画像が無いことが度々あったため変更した(2026-10-02)。
   ただし同日の検証(ピンクのロゴ T シャツ + デニムの同じ入力で各 5 回)では、`["TEXT", "IMAGE"]` は 5 回とも `STOP` で空のテキスト、

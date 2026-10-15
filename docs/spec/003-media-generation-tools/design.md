@@ -58,7 +58,7 @@
 
 | 設定 | 既定値 | 用途 |
 | --- | --- | --- |
-| `image_model` | `gemini-3.1-flash-lite-image` | 画像生成モデル |
+| `image_model` | `gemini-nano-banana-2.1` | 画像生成モデル。2026-10-14 に `gemini-3.1-flash-lite-image`(Nano Banana 2 Flash Lite)から変更。応答に考える過程(thought)の下書きの画像が混ざっても、完成の画像だけを使う |
 | `video_model` | `gemini-omni-1.1-flash-preview` | 動画生成モデル |
 | `created_images_dir` | `app/created_images` | 画像の保存先(backend/ からの相対) |
 | `created_videos_dir` | `app/created_videos` | 動画の保存先 |

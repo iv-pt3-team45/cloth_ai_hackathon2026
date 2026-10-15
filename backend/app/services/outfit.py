@@ -6,7 +6,7 @@
    画面がライブを選んだ時点で調べた形態を送ってくればそれを使い、送られてこなければ提案の前に調べる。
    分からなければ足さずに提案する。
 2. 画像: マネキン画像と、提案に使う服の**写真そのもの**を
-   Nano Banana 2 Flash Lite(IMAGE_MODEL)に渡し、マネキンに着せた画像を生成する。
+   Nano Banana 2.1(IMAGE_MODEL)に渡し、マネキンに着せた画像を生成する。
    生成画像は spec 003 と同じ created_images/ に保存する。
 
 カルチャー情報・ライブ情報はリクエストで受け取るだけで保存しない(spec 008 / 009 の方針)。
@@ -267,12 +267,15 @@ def build_image_parts(
 
 
 def extract_image(response: types.GenerateContentResponse) -> tuple[bytes, str] | None:
-    """応答から最初の画像を取り出す。無ければ None。"""
+    """応答から最初の画像を取り出す。無ければ None。
+
+    考える過程(thought)の画像は下書きなので使わない(Nano Banana 2.1 は完成の画像の前に返す)。
+    """
     candidates = response.candidates or []
     content = candidates[0].content if candidates else None
     for part in (content.parts or []) if content else []:
         inline = part.inline_data
-        if inline and inline.data:
+        if inline and inline.data and not part.thought:
             return inline.data, inline.mime_type or "image/png"
     return None
 
